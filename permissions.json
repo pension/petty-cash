@@ -1,0 +1,149 @@
+{
+"app": "petty-cash-api",
+  "permissions": [
+    {
+      "subject": "links",
+      "action": "findAll",
+      "description": "View all short links",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "links",
+      "action": "findOne",
+      "description": "View a short link",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "links",
+      "action": "create",
+      "description": "Create short links",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "links",
+      "action": "update",
+      "description": "Update short links",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "links",
+      "action": "remove",
+      "description": "Delete short links",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "qrCodes",
+      "action": "findAll",
+      "description": "View all QR codes",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "qrCodes",
+      "action": "findOne",
+      "description": "View a QR code",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "qrCodes",
+      "action": "create",
+      "description": "Create QR codes",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "qrCodes",
+      "action": "update",
+      "description": "Update QR codes",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "qrCodes",
+      "action": "remove",
+      "description": "Delete QR codes",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "qrCodes",
+      "action": "render",
+      "description": "Render and download QR codes",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "templates",
+      "action": "findAll",
+      "description": "View all QR templates",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "templates",
+      "action": "findOne",
+      "description": "View a QR template",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "templates",
+      "action": "create",
+      "description": "Create QR templates",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "templates",
+      "action": "update",
+      "description": "Update QR templates",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "templates",
+      "action": "remove",
+      "description": "Delete QR templates",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "frames",
+      "action": "findAll",
+      "description": "View all QR frames",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "frames",
+      "action": "findOne",
+      "description": "View a QR frame",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "frames",
+      "action": "create",
+      "description": "Create QR frames",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "frames",
+      "action": "update",
+      "description": "Update QR frames",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "frames",
+      "action": "remove",
+      "description": "Delete QR frames",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "analytics",
+      "action": "getGlobal",
+    "description": "View global petty-cash analytics",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "analytics",
+      "action": "getForLink",
+      "description": "View analytics for a short link",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "analytics",
+      "action": "getForQrCode",
+      "description": "View analytics for a QR code",
+      "organisation": "Maldives Pension Administration Office"
+    }
+  ]
+}

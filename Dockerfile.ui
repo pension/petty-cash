@@ -1,0 +1,69 @@
+# petty-cash-ui only. Build context is the repo ROOT (not apps/petty-cash-ui) —
+# yarn v1 has no per-workspace install, so `yarn install` needs every
+# workspace's package.json present to resolve against the single root
+# yarn.lock, even though this image never builds or ships petty-cash-api
+# itself.
+#
+# Separate from Dockerfile.api deliberately — see that file's header for
+# why (this Cloud Build environment doesn't prune un-targeted stages the
+# way BuildKit does, so a shared multi-app Dockerfile with --target had
+# both pipelines building both apps' full builder stages on every push).
+
+FROM node:24-alpine AS deps
+
+WORKDIR /home/node
+
+ARG GH_PAT='{{GITHUB_TOKEN}}'
+RUN echo "//npm.pkg.github.com/:_authToken=${GH_PAT}" > .npmrc && \
+    echo "@pension:registry=https://npm.pkg.github.com" >> .npmrc && \
+    echo "strict-peer-dependencies=false" >> .npmrc
+
+COPY package.json yarn.lock ./
+COPY apps/petty-cash-api/package.json apps/petty-cash-api/package.json
+COPY apps/petty-cash-ui/package.json apps/petty-cash-ui/package.json
+# petty-cash-ui's own postinstall (copies @pension/ui-kit's prebuilt CSS into
+# public/ui-kit.css) — needs its script file present before this install.
+COPY apps/petty-cash-ui/scripts apps/petty-cash-ui/scripts
+COPY packages/qr-render/package.json packages/qr-render/package.json
+RUN yarn install --frozen-lockfile
+
+# ---
+
+FROM deps AS builder
+
+# apps/petty-cash-ui/.env is materialized by cloudbuild-stag-ui.yml's SetupEnv
+# step before `docker build` runs, at the same path nuxt.config.ts/
+# AUTH.md use locally — this COPY picks it up like any other source.
+COPY . /home/node/
+
+# buildQrSvg/buildFramedQrSvg are used client-side too, for the live
+# previews (see AGENTS.md) — petty-cash-ui depends on @petty-cash/qr-render's
+# compiled dist, not its source.
+RUN yarn workspace @petty-cash/qr-render build
+RUN yarn workspace petty-cash-ui build
+
+# ---
+
+# `nuxt build` with ssr:false still produces a real Nitro server
+# (node-server preset) under .output/server — it serves the static SPA
+# shell + assets and reads Nuxt's public runtime config from env vars
+# per-request, so this isn't a static file server.
+FROM node:24-alpine AS runner
+
+USER node
+WORKDIR /home/node
+
+COPY --from=builder --chown=node:node /home/node/package.json /home/node/yarn.lock /home/node/.npmrc ./
+COPY --from=builder --chown=node:node /home/node/node_modules ./node_modules
+COPY --from=builder --chown=node:node /home/node/apps/petty-cash-ui/.env ./
+COPY --from=builder --chown=node:node /home/node/apps/petty-cash-ui/.output ./.output
+# Same symlink reasoning as Dockerfile.api's runner stage.
+COPY --from=builder --chown=node:node /home/node/packages/qr-render/package.json ./packages/qr-render/package.json
+COPY --from=builder --chown=node:node /home/node/packages/qr-render/dist ./packages/qr-render/dist
+
+ENV PORT=3000
+ENV NUXT_HOST=0.0.0.0
+
+EXPOSE 3000
+
+CMD ["node", ".output/server/index.mjs"]

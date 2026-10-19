@@ -1,0 +1,407 @@
+# UI Library Component & Utility Index
+
+Concise directory linking detailed usage guides for all @pension/ui-kit components, helpers, directives, and composables.
+
+## Composition Principles
+
+# Getting Started & Global Configuration
+
+## 1. Installation & Setup
+
+To use `@pension/ui-kit` in your Vue 3 application:
+
+### Install the package
+
+Ensure you have access to the `@pension` registry and install:
+
+```bash
+npm install @pension/ui-kit
+```
+
+### Import Styles
+
+You **must** import the package's compiled CSS in your main entry file (e.g., `main.js` or `main.ts`):
+
+```javascript
+import "@pension/ui-kit/style.css";
+```
+
+### Register the Plugin (Optional)
+
+You can register all components globally:
+
+```javascript
+import { createApp } from "vue";
+import UiKit from "@pension/ui-kit";
+import App from "./App.vue";
+
+const app = createApp(App);
+app.use(UiKit);
+app.mount("#app");
+```
+
+Or import components individually as needed (recommended for better tree-shaking):
+
+```javascript
+import { PoButton } from "@pension/ui-kit";
+```
+
+---
+
+## 2. Tailwind CSS Styling
+
+> [!NOTE]
+> The custom **`po:`** prefix is **only used internally** within the `@pension/ui-kit` library codebase.
+> In the applications where this library is imported and consumed, you **do not need the prefix**. Use standard Tailwind CSS utility classes.
+>
+> **Consuming Application Example:**
+> `<div class="flex items-center gap-4 p-4">`
+
+---
+
+# Component Composition Patterns & Guides
+
+This section provides the official templates and guidelines on how to combine `@pension/ui-kit` components together to build common UI pages, tables, modals, and search cards.
+
+## 1. Core Page Layout
+
+Use this template when creating new pages. It sets up a layout with a header, page title, actions area, and content card inside `PoContentArea`.
+
+```vue
+<template>
+	<PoContentArea>
+		<header class="lg:flex lg:items-end">
+			<PoPageTitle
+				class="grow"
+				:stand-alone="true"
+				label="Page Title"
+				description="Page description, should be three lines of text."
+			/>
+			<div class="mt-5 lg:mt-0 shrink-0 gap-2 flex items-center flex-wrap">
+				<!-- Page action buttons should go here -->
+			</div>
+		</header>
+		<div class="space-y-2">
+			<!-- Content goes here. you can change this area -->
+			<PoCard> ... </PoCard>
+			<!-- Content goes here. you can change this area -->
+		</div>
+	</PoContentArea>
+</template>
+
+<script setup lang="ts">
+import { ref } from "vue";
+import { PoContentArea, PoPageTitle, PoCard } from "@pension/ui-kit";
+
+definePageMeta({
+	layout: "main",
+});
+
+useHead({
+	title: "Sample Page Title",
+});
+
+interface Props {}
+
+withDefaults(defineProps<Props>(), {});
+</script>
+```
+
+---
+
+## 2. Standard Table
+
+Use this pattern when displaying lists and tabular data using `PoTable`.
+
+```vue
+<template>
+	<PoTable :thead="tableHead" :tbody="tableBody">
+		<template #th="{ label }">
+			<span v-if="'Action' !== label">{{ label }}</span>
+			<span v-if="'Action' == label" class="sr-only">{{ label }}</span>
+		</template>
+		<template #td="{ item }">
+			<td data-title="employer_name">{{ item.employer_name }}</td>
+		</template>
+	</PoTable>
+</template>
+
+<script setup lang="ts">
+import { ref } from "vue";
+import { PoTable } from "@pension/ui-kit";
+
+const tableHead = [{ label: "EmployerName" }];
+
+const tableBody = ref([
+	{
+		employer_name: "",
+	},
+]);
+</script>
+```
+
+### Table with Action Buttons Pattern
+
+When adding actions (Edit, Delete, View) to a table row, wrap the actions in a right-aligned flex container:
+
+```vue
+<template>
+	<PoTable :thead="tableHead" :tbody="tableBody">
+		<template #th="{ label }">
+			<span v-if="'Action' !== label">{{ label }}</span>
+			<span v-if="'Action' == label" class="sr-only">Actions</span>
+		</template>
+		<template #td="{ item }">
+			<td data-title="Name">{{ item.name }}</td>
+			<td data-title="Action">
+				<div class="flex items-center space-x-3 justify-end">
+					<PoTableAction btn-type="view" @click="viewItem(item)" />
+					<PoTableAction btn-type="edit" @click="editItem(item)" />
+					<PoTableAction btn-type="delete" @click="deleteItem(item)" />
+				</div>
+			</td>
+		</template>
+	</PoTable>
+</template>
+```
+
+---
+
+## 3. Search and Filter Card
+
+Use this template to build search, filter, and pagination panels at the top of lists.
+
+```vue
+<template>
+	<PoCard class="p-3 pl-4">
+		<div class="lg:flex items-center lg:space-x-3">
+			<div class="grow -mt-1">
+				<PoSearch placeholder="Search.." v-model="searchQuery" />
+			</div>
+			<div class="mt-5 lg:mt-0 shrink-0 flex items-center space-x-2">
+				<span class="shrink-0 text-slate-500 font-medium text-xs">Filters</span>
+				<div class="flex items-center space-x-2">
+					<PoStatusPill
+						:icon="TagIcon"
+						label="Requested"
+						color="blue"
+						grayscale
+					/>
+				</div>
+			</div>
+
+			<div
+				class="shrink-0 flex items-center space-x-3 pt-5 md:pt-0 justify-end md:justify-start"
+			>
+				<span
+					class="hidden lg:block border-l border-slate-400 h-3 w-3 ml-2"
+				></span>
+				<PoPagination :totalPages="2" :currentPage="1" />
+			</div>
+		</div>
+	</PoCard>
+</template>
+
+<script setup lang="ts">
+import { ref } from "vue";
+import { PoCard, PoSearch, PoStatusPill, PoPagination } from "@pension/ui-kit";
+import { TagIcon } from "@heroicons/vue/20/solid";
+
+const searchQuery = ref("");
+</script>
+```
+
+---
+
+## 4. Modal and Trigger Button
+
+Use this template when building modal dialogs with trigger buttons.
+
+```vue
+<template>
+	<div class="inline-block">
+		<PoButton
+			label="Add Holidays"
+			:icon="GiftIcon"
+			@button-click="() => (showModalWindow = true)"
+		/>
+
+		<PoModal
+			:show="showModalWindow"
+			@modal-closed="() => (showModalWindow = false)"
+			modal-title="Add Holidays"
+			modal-width="sm:max-w-3xl"
+		>
+			<template v-slot:content>
+				<!-- Modal body content goes here -->
+				...
+			</template>
+			<template v-slot:footer>
+				<div class="px-5 py-4 flex justify-end gap-3">
+					<PoButton label="Submit" />
+				</div>
+			</template>
+		</PoModal>
+	</div>
+</template>
+
+<script setup lang="ts">
+import { ref } from "vue";
+import { GiftIcon } from "@heroicons/vue/20/solid";
+import { PoButton, PoModal } from "@pension/ui-kit";
+
+const showModalWindow = ref(false);
+</script>
+```
+
+---
+
+## 5. Page header with Page Status and Buttons
+
+Use this template when building modal dialogs with trigger buttons.
+
+```vue
+<template>
+	<header class="lg:flex lg:items-end">
+		<PoPageTitle
+			class="grow"
+			:stand-alone="true"
+			:label="employer.name"
+			description="View the registration details and history of this employer. You can also request updates to the organisation."
+		/>
+		<div class="shrink-0">
+			<PoPageStatus
+				v-if="employer.status === 'active'"
+				:icon="CheckBadgeIcon"
+				label="Active"
+				color="green"
+			/>
+			<PoPageStatus
+				v-else-if="employer.status === 'pending'"
+				:icon="ClockIcon"
+				label="Pending Approval"
+				color="blue"
+			/>
+			<PoPageStatus
+				v-else-if="employer.status === 'deregistered'"
+				:icon="XCircleIcon"
+				label="Deregistered"
+				color="red"
+			/>
+			<div
+				class="mt-5 lg:mt-0 shrink-0 space-x-2 flex items-center justify-end"
+			>
+				<PoButton
+					label="Request Organisation Update"
+					@button-click="openUpdateModal"
+					:disabled="employer.status === 'deregistered'"
+				/>
+				<PoButton
+					label="Request Deregistration"
+					action-type="danger"
+					@button-click="openDeregisterModal"
+					:disabled="employer.status === 'deregistered'"
+				/>
+				<BackButton />
+			</div>
+		</div>
+	</header>
+
+	<script setup lang="ts">
+		import {
+			CheckBadgeIcon,
+			ClockIcon,
+			XCircleIcon,
+		} from "@heroicons/vue/20/solid";
+		import { PoPageTitle, PoPageStatus, PoButton } from "@pension/ui-kit";
+	</script>
+</template>
+```
+
+
+---
+
+## Library Reference Directory
+
+- **[PoAppLink](https://ui-kit-dev.mpao.mv/uikit-llms/PoAppLink.txt)**: The AppLink component renders navigation links with theme styling, routing support, and custom transition effects.
+- **[PoButton](https://ui-kit-dev.mpao.mv/uikit-llms/PoButton.txt)**: The Button component triggers actions on click and supports various sizes, colors, loading states, and custom icon templates.
+- **[PoTableAction](https://ui-kit-dev.mpao.mv/uikit-llms/PoTableAction.txt)**: The TableAction component displays action triggers specifically optimized for data table row operations.
+- **[PoChatLogItem](https://ui-kit-dev.mpao.mv/uikit-llms/PoChatLogItem.txt)**: The ChatLogItem component renders an individual message within the chat history list.
+- **[PoAiSuggestions](https://ui-kit-dev.mpao.mv/uikit-llms/PoAiSuggestions.txt)**: The AiSuggestions component displays AI-generated recommendation cards.
+- **[PoAuditLog](https://ui-kit-dev.mpao.mv/uikit-llms/PoAuditLog.txt)**: The AuditLog component lists database record history changes in a timeline.
+- **[PoCard](https://ui-kit-dev.mpao.mv/uikit-llms/PoCard.txt)**: The Card component structures content blocks with headers, footers, and shadows.
+- **[PoChecklist](https://ui-kit-dev.mpao.mv/uikit-llms/PoChecklist.txt)**: The Checklist component displays todo items with status indicators.
+- **[PoComparisonStats](https://ui-kit-dev.mpao.mv/uikit-llms/PoComparisonStats.txt)**: The ComparisonStats component compares multiple metrics with percentage change trends.
+- **[PoDescriptionList](https://ui-kit-dev.mpao.mv/uikit-llms/PoDescriptionList.txt)**: The DescriptionList component renders terms and descriptions in a structured definition list.
+- **[PoDownloadFileList](https://ui-kit-dev.mpao.mv/uikit-llms/PoDownloadFileList.txt)**: The DownloadFileList component displays files with file type icons and download links.
+- **[PoLogs](https://ui-kit-dev.mpao.mv/uikit-llms/PoLogs.txt)**: The Logs component visualizes formatted system activity logs and audit trails.
+- **[PoProgressTracker](https://ui-kit-dev.mpao.mv/uikit-llms/PoProgressTracker.txt)**: The ProgressTracker component displays step-by-step progress checkmarks.
+- **[PoStatsBlock](https://ui-kit-dev.mpao.mv/uikit-llms/PoStatsBlock.txt)**: The StatsBlock component structures metric stats cards in a grid format.
+- **[PoTable](https://ui-kit-dev.mpao.mv/uikit-llms/PoTable.txt)**: The Table component renders rich data tables with pagination, sorting, and row selection.
+- **[PoTextExcerpt](https://ui-kit-dev.mpao.mv/uikit-llms/PoTextExcerpt.txt)**: The TextExcerpt component truncates long paragraphs with custom 'Read More' expand triggers.
+- **[PoTimeline](https://ui-kit-dev.mpao.mv/uikit-llms/PoTimeline.txt)**: The Timeline component displays chronological events in a vertical line layout.
+- **[PoTree](https://ui-kit-dev.mpao.mv/uikit-llms/PoTree.txt)**: The Tree component visualizes hierarchical tree data structures with collapsible branches.
+- **[PoCardSearch](https://ui-kit-dev.mpao.mv/uikit-llms/PoCardSearch.txt)**: The CardSearch component renders a search input styled for insertion inside card headers.
+- **[PoCheckbox](https://ui-kit-dev.mpao.mv/uikit-llms/PoCheckbox.txt)**: The Checkbox component allows users to toggle boolean states or select multiple items from a list.
+- **[PoConsent](https://ui-kit-dev.mpao.mv/uikit-llms/PoConsent.txt)**: The Consent component handles user agreement checkboxes with custom validation and terms links.
+- **[PoDatePicker](https://ui-kit-dev.mpao.mv/uikit-llms/PoDatePicker.txt)**: The DatePicker component provides an interactive calendar dropdown for single date selection.
+- **[PoDateRangePicker](https://ui-kit-dev.mpao.mv/uikit-llms/PoDateRangePicker.txt)**: The DateRangePicker component enables users to select start and end dates through a unified calendar interface.
+- **[PoFilter](https://ui-kit-dev.mpao.mv/uikit-llms/PoFilter.txt)**: The Filter component creates search and category filters that dynamically update browser query parameters.
+- **[PoInputField](https://ui-kit-dev.mpao.mv/uikit-llms/PoInputField.txt)**: The InputField component renders text input controls with integrated labels, helper text, and validation error messages.
+- **[PoInputFile](https://ui-kit-dev.mpao.mv/uikit-llms/PoInputFile.txt)**: The InputFile component handles file selection and uploads with drag-and-drop support and preview states.
+- **[PoMobileInput](https://ui-kit-dev.mpao.mv/uikit-llms/PoMobileInput.txt)**: The MobileInput component format-validates phone numbers with country code selectors.
+- **[PoMonthYearPicker](https://ui-kit-dev.mpao.mv/uikit-llms/PoMonthYearPicker.txt)**: The MonthYearPicker component provides dropdown selectors for month and year values.
+- **[PoMultiSelect](https://ui-kit-dev.mpao.mv/uikit-llms/PoMultiSelect.txt)**: The MultiSelect component allows choosing multiple tags or items from a searchable dropdown list.
+- **[PoRadioInput](https://ui-kit-dev.mpao.mv/uikit-llms/PoRadioInput.txt)**: The RadioInput component displays grouped option selections where only one choice can be active.
+- **[PoSearch](https://ui-kit-dev.mpao.mv/uikit-llms/PoSearch.txt)**: The Search component renders a search input with debounce timing and clear button actions.
+- **[PoSelectApi](https://ui-kit-dev.mpao.mv/uikit-llms/PoSelectApi.txt)**: The SelectApi component fetches and displays selector options dynamically from an API endpoint.
+- **[PoSelectField](https://ui-kit-dev.mpao.mv/uikit-llms/PoSelectField.txt)**: The SelectField component provides a searchable custom dropdown selector optimized for lists.
+- **[PoTableCheckbox](https://ui-kit-dev.mpao.mv/uikit-llms/PoTableCheckbox.txt)**: The TableCheckbox component handles row selection states within data tables.
+- **[PoTextarea](https://ui-kit-dev.mpao.mv/uikit-llms/PoTextarea.txt)**: The Textarea component renders multi-line text input fields with auto-resize and character counts.
+- **[PoToggle](https://ui-kit-dev.mpao.mv/uikit-llms/PoToggle.txt)**: The Toggle component provides a visual switch element for binary state selections.
+- **[PoUpload](https://ui-kit-dev.mpao.mv/uikit-llms/PoUpload.txt)**: The Upload component handles file queuing, progress bars, and server upload actions.
+- **[PoFormStatusMessage](https://ui-kit-dev.mpao.mv/uikit-llms/PoFormStatusMessage.txt)**: The FormStatusMessage component renders state feedback alerts for form submissions.
+- **[PoLoadingIndicator](https://ui-kit-dev.mpao.mv/uikit-llms/PoLoadingIndicator.txt)**: The LoadingIndicator component provides animated spinners and loading overlays.
+- **[PoMessage](https://ui-kit-dev.mpao.mv/uikit-llms/PoMessage.txt)**: The Message component displays contextual feedback banners (info, success, warning, error).
+- **[PoPageProgress](https://ui-kit-dev.mpao.mv/uikit-llms/PoPageProgress.txt)**: The PageProgress component shows linear loading indicators at the top of the viewport.
+- **[PoPageStats](https://ui-kit-dev.mpao.mv/uikit-llms/PoPageStats.txt)**: The PageStats component displays numeric page metrics with change trends.
+- **[PoPageStatus](https://ui-kit-dev.mpao.mv/uikit-llms/PoPageStatus.txt)**: The PageStatus component displays fullscreen empty, error, or loading states.
+- **[PoCardTabs](https://ui-kit-dev.mpao.mv/uikit-llms/PoCardTabs.txt)**: The CardTabs component displays tab-based navigation styled specifically for card components.
+- **[PoContextMenu](https://ui-kit-dev.mpao.mv/uikit-llms/PoContextMenu.txt)**: The ContextMenu component displays custom context-sensitive dropdown menus on trigger actions.
+- **[PoTabs](https://ui-kit-dev.mpao.mv/uikit-llms/PoTabs.txt)**: The Tabs component renders tab-based navigation headers for switching between view panels.
+- **[PoAvatar](https://ui-kit-dev.mpao.mv/uikit-llms/PoAvatar.txt)**: The Avatar component renders user profile images with fallback initials.
+- **[PoEmpty](https://ui-kit-dev.mpao.mv/uikit-llms/PoEmpty.txt)**: The Empty component renders placeholder illustrations when no records are found.
+- **[PoHeading](https://ui-kit-dev.mpao.mv/uikit-llms/PoHeading.txt)**: The Heading component displays styled title headers with levels H1-H6.
+- **[PoLoading](https://ui-kit-dev.mpao.mv/uikit-llms/PoLoading.txt)**: The Loading component renders placeholder card layouts during data fetches.
+- **[PoModalSteps](https://ui-kit-dev.mpao.mv/uikit-llms/PoModalSteps.txt)**: The ModalSteps component displays step-by-step wizard progress inside dialogs.
+- **[PoPageInfo](https://ui-kit-dev.mpao.mv/uikit-llms/PoPageInfo.txt)**: The PageInfo component renders helpful information callout sections.
+- **[PoPagination](https://ui-kit-dev.mpao.mv/uikit-llms/PoPagination.txt)**: The Pagination component renders controls to navigate through multi-page lists.
+- **[PoProfileCard](https://ui-kit-dev.mpao.mv/uikit-llms/PoProfileCard.txt)**: The ProfileCard component renders user profiles with status and action keys.
+- **[PoShimmerSpan](https://ui-kit-dev.mpao.mv/uikit-llms/PoShimmerSpan.txt)**: The ShimmerSpan component renders skeleton loading state block layouts.
+- **[PoStatusPill](https://ui-kit-dev.mpao.mv/uikit-llms/PoStatusPill.txt)**: The StatusPill component displays tiny colored status labels.
+- **[PoSteps](https://ui-kit-dev.mpao.mv/uikit-llms/PoSteps.txt)**: The Steps component visualizes sequential path progress indicators.
+- **[PoTooltip](https://ui-kit-dev.mpao.mv/uikit-llms/PoTooltip.txt)**: The Tooltip component shows interactive description bubbles on element hover.
+- **[PoTypography](https://ui-kit-dev.mpao.mv/uikit-llms/PoTypography.txt)**: The Typography component applies consistent text styles across elements.
+- **[PoUpdatesList](https://ui-kit-dev.mpao.mv/uikit-llms/PoUpdatesList.txt)**: The UpdatesList component lists release notes and application update histories.
+- **[Rufiyaa](https://ui-kit-dev.mpao.mv/uikit-llms/Rufiyaa.txt)**: The Rufiyaa component formats numeric inputs or text as Maldivian currency format.
+- **[PoDRStatus](https://ui-kit-dev.mpao.mv/uikit-llms/PoDRStatus.txt)**: The DRStatus component visualizes disaster recovery status indicators.
+- **[PoAlert](https://ui-kit-dev.mpao.mv/uikit-llms/PoAlert.txt)**: The Alert component renders modal dialogue messages requiring immediate user confirmation.
+- **[PoModal](https://ui-kit-dev.mpao.mv/uikit-llms/PoModal.txt)**: The Modal component provides dialog overlays for focused content and user forms.
+- **[PoNotification](https://ui-kit-dev.mpao.mv/uikit-llms/PoNotification.txt)**: The Notification component displays structured slide-out alerts for user updates.
+- **[PoSlideover](https://ui-kit-dev.mpao.mv/uikit-llms/PoSlideover.txt)**: The Slideover component renders side panel drawer overlays for secondary tasks.
+- **[PoToast](https://ui-kit-dev.mpao.mv/uikit-llms/PoToast.txt)**: The Toast component displays non-blocking, temporary notification bubbles on the screen corner.
+- **[PoAppIcon](https://ui-kit-dev.mpao.mv/uikit-llms/PoAppIcon.txt)**: The AppIcon component renders unified application brand icons with scaling presets.
+- **[PoAppTray](https://ui-kit-dev.mpao.mv/uikit-llms/PoAppTray.txt)**: The AppTray component displays a grid of accessible applications for quick switching.
+- **[PoContentArea](https://ui-kit-dev.mpao.mv/uikit-llms/PoContentArea.txt)**: The ContentArea component wraps the primary content with layout spacing and responsiveness rules.
+- **[PoPageTitle](https://ui-kit-dev.mpao.mv/uikit-llms/PoPageTitle.txt)**: The PageTitle component displays primary page headers with breadcrumbs and action buttons.
+- **[PoProfileSwitcher](https://ui-kit-dev.mpao.mv/uikit-llms/PoProfileSwitcher.txt)**: The ProfileSwitcher component handles account switching dropdowns in the top navigation bar.
+- **[PoSidebarDrawer](https://ui-kit-dev.mpao.mv/uikit-llms/PoSidebarDrawer.txt)**: The SidebarDrawer component renders responsive sidebar navigation with collapsable groups.
+- **[PoTopBar](https://ui-kit-dev.mpao.mv/uikit-llms/PoTopBar.txt)**: The TopBar component provides the main application header containing branding, search, and user controls.
+- **[Debounce](https://ui-kit-dev.mpao.mv/uikit-llms/Debounce.txt)**: The Debounce helper utility prevents a function from being called multiple times in rapid succession, deferring execution until a delay h...
+- **[FormatDate](https://ui-kit-dev.mpao.mv/uikit-llms/FormatDate.txt)**: The FormatDate utility formats ISO date strings or Date objects into human-readable date formats.
+- **[FormatMoney](https://ui-kit-dev.mpao.mv/uikit-llms/FormatMoney.txt)**: The FormatMoney utility formats numeric values into styled Maldivian Rufiyaa (MVR) currency presentation format.
+- **[SafeFormatDate](https://ui-kit-dev.mpao.mv/uikit-llms/SafeFormatDate.txt)**: The SafeFormatDate utility safely parses and formats dates, returning fallback placeholders if the date value is invalid.
+- **[UseEventBus](https://ui-kit-dev.mpao.mv/uikit-llms/UseEventBus.txt)**: The UseEventBus composable provides a global event bus instance to publish and subscribe to app-wide events.
+- **[UseThaanaKeyboard](https://ui-kit-dev.mpao.mv/uikit-llms/UseThaanaKeyboard.txt)**: The UseThaanaKeyboard composable handles custom layout inputs for the Dhivehi (Thaana) script.
+- **[UseToastify](https://ui-kit-dev.mpao.mv/uikit-llms/UseToastify.txt)**: The UseToastify composable manages transient, non-blocking toast notifications in the application.
+- **[hasPermission](https://ui-kit-dev.mpao.mv/uikit-llms/hasPermission.txt)**: The HasPermission custom directive checks user access permissions to dynamically show or hide DOM elements.

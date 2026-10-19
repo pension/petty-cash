@@ -1,0 +1,87 @@
+@import "tailwindcss";
+
+@import 'tailwindcss/utilities' layer(utilities);
+
+@plugin '@tailwindcss/typography';
+
+@theme {
+  --color-mpao-orange: #ec6d25;
+  --color-mpao-blue: #242d59;
+  --color-mpao-lightblue: #3f54c0;
+
+  --animate-gradient: gradient 3s ease infinite;
+  --animate-fadeInLeft: fadeInLeft 0.5s cubic-bezier(0.4, 0, 0.6, 1) 1 both;
+  --animate-fadeInDown: fadeInDown 0.3s cubic-bezier(0.4, 0, 0.6, 1) 1 both;
+  --animate-moveToLeft: moveToLeft 0.2s ease both;
+  --animate-moveToRight: moveToRight 0.2s ease both;
+  --animate-moveFromLeft: moveFromLeft 0.2s ease both;
+  --animate-moveFromRight: moveFromRight 0.2s ease both;
+
+  @keyframes gradient {
+    0%,
+    100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+  @keyframes fadeInLeft {
+    from {
+      opacity: 0;
+      transform: translate3d(-100%, 0, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+  @keyframes fadeInDown {
+    from {
+      opacity: 0;
+      transform: translate3d(0, -100%, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+  @keyframes moveToLeft {
+    from {
+    }
+    to {
+      transform: translateX(-100%);
+    }
+  }
+  @keyframes moveToRight {
+    from {
+    }
+    to {
+      transform: translateX(100%);
+    }
+  }
+  @keyframes moveFromLeft {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+    }
+  }
+  @keyframes moveFromRight {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+    }
+  }
+}
+
+@layer base {
+	*,
+	::after,
+	::before,
+	::backdrop,
+	::file-selector-button {
+		border-color: #e5e6ea;
+	}
+}

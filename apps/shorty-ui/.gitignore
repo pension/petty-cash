@@ -1,0 +1,12 @@
+.DS_Store
+node_modules
+
+*.log*
+.nuxt
+.nitro
+.cache
+.output
+.env
+
+dist
+public/ui-kit.css

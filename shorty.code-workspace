@@ -1,0 +1,17 @@
+{
+  "folders": [
+    {
+      "name": "petty-cash (root)",
+      "path": "."
+    },
+    {
+      "name": "petty-cash-ui",
+      "path": "apps/petty-cash-ui"
+    },
+    {
+      "name": "petty-cash-api",
+      "path": "apps/petty-cash-api"
+    }
+  ],
+  "settings": {}
+}

@@ -1,0 +1,187 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum LinkStatus {
+  active
+  archived
+}
+
+enum FrameType {
+  bottom_label  @map("bottom-label")
+  top_header    @map("top-header")
+  border
+  card_box      @map("card-box")
+  custom_upload @map("custom-upload")
+}
+
+enum QRPosition {
+  center
+  top
+  bottom
+}
+
+enum OverlayType {
+  none
+  logo
+  text
+}
+
+enum EventType {
+  click
+  scan
+}
+
+model ShortLink {
+  id        String     @id @default(cuid())
+  title     String
+  longUrl   String     @map("long_url") @db.Text
+  shortCode String     @unique @map("short_code")
+  shortUrl  String     @map("short_url")
+  clicks    Int        @default(0)
+  tags      Json       @default("[]")
+  expiresAt DateTime?  @map("expires_at")
+  status    LinkStatus @default(active)
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  events             EngagementEvent[]
+  qrCode             QRCode?
+  history            LinkHistoryEvent[]
+  destinationHistory LinkDestinationHistory[]
+
+  @@index([status])
+  @@index([expiresAt])
+  @@map("short_link")
+}
+
+model LinkHistoryEvent {
+  id          String   @id @default(cuid())
+  label       String
+  description String?  @db.Text
+  by          String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  linkId String    @map("link_id")
+  link   ShortLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  @@index([linkId, createdAt])
+  @@map("link_history_event")
+}
+
+model LinkDestinationHistory {
+  id             String   @id @default(cuid())
+  destinationUrl String   @map("destination_url") @db.Text
+  changedBy      String   @map("changed_by")
+  isCurrent      Boolean  @default(true) @map("is_current")
+  effectiveFrom  DateTime @default(now()) @map("effective_from")
+
+  linkId String    @map("link_id")
+  link   ShortLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  @@index([linkId, effectiveFrom])
+  @@map("link_destination_history")
+}
+
+model QRCode {
+  id          String      @id @default(cuid())
+  title       String
+  longUrl     String      @map("long_url") @db.Text
+  scans       Int         @default(0)
+  color       String      @default("#000000")
+  bgColor     String      @default("#ffffff") @map("bg_color")
+  style       String      @default("soft-pixel")
+  corner      String      @default("classic-square")
+  overlayType OverlayType @default(none) @map("overlay_type")
+  overlayText String?     @map("overlay_text") @db.VarChar(4)
+  logo        String?
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  linkId     String?     @unique @map("link_id")
+  link       ShortLink?  @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  templateId String?     @map("template_id")
+  template   QRTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  frameId    String?     @map("frame_id")
+  frame      QRFrame?    @relation(fields: [frameId], references: [id], onDelete: SetNull)
+
+  events EngagementEvent[]
+
+  @@index([linkId])
+  @@map("qr_code")
+}
+
+model QRTemplate {
+  id          String      @id @default(cuid())
+  name        String
+  desc        String?
+  style       String      @default("soft-pixel")
+  corner      String      @default("classic-square")
+  fgColor     String      @default("#000000") @map("fg_color")
+  bgColor     String      @default("#ffffff") @map("bg_color")
+  overlayType OverlayType @default(none) @map("overlay_type")
+  overlayText String?     @map("overlay_text")
+  logo        String?
+  isCustom    Boolean     @default(true) @map("is_custom")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  qrCodes QRCode[]
+
+  @@index([isCustom])
+  @@map("qr_template")
+}
+
+model QRFrame {
+  id             String     @id @default(cuid())
+  name           String
+  desc           String?
+  frameType      FrameType  @default(bottom_label) @map("frame_type")
+  frameColor     String     @default("#0f172a") @map("frame_color")
+  textColor      String     @default("#ffffff") @map("text_color")
+  borderColor    String     @default("#e2e8f0") @map("border_color")
+  qrPosition     QRPosition @default(center) @map("qr_position")
+  qrSizePercent  Int        @default(85) @map("qr_size_percent")
+  ctaText        String     @default("SCAN ME") @map("cta_text")
+  customImageUrl String?    @map("custom_image_url") @db.Text
+  isCustom       Boolean    @default(true) @map("is_custom")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  qrCodes QRCode[]
+
+  @@index([isCustom])
+  @@map("qr_frame")
+}
+
+model EngagementEvent {
+  id          String    @id @default(cuid())
+  type        EventType
+  ipAddress   String?   @map("ip_address")
+  userAgent   String?   @map("user_agent") @db.Text
+  referrer    String?   @db.Text
+  countryCode String?   @map("country_code") @db.VarChar(3)
+  countryName String?   @map("country_name")
+  cityName    String?   @map("city_name")
+  deviceType  String?   @map("device_type")
+  browser     String?
+  os          String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  linkId   String?    @map("link_id")
+  link     ShortLink? @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  qrCodeId String?    @map("qr_code_id")
+  qrCode   QRCode?    @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
+
+  @@index([type])
+  @@index([linkId, createdAt])
+  @@index([qrCodeId, createdAt])
+  @@index([countryCode])
+  @@index([createdAt])
+  @@map("engagement_event")
+}

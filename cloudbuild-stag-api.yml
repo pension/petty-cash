@@ -1,0 +1,82 @@
+steps:
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: 'bash'
+    args:
+      - -c
+      - |
+        mkdir -p apps/petty-cash-api/secrets &&
+        gcloud secrets versions access latest --secret=stag-nest-api-global > apps/petty-cash-api/.env &&
+        gcloud secrets versions access latest --secret=$_ENV_SECRET >> apps/petty-cash-api/.env &&
+        gcloud secrets versions access latest --secret=authjs-public-key > apps/petty-cash-api/secrets/jwtRS256.key.pub
+    id: SetupEnv
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - '--build-arg=GH_PAT=$_GH_PAT'
+      - '-t'
+      - '$_GCR_HOSTNAME/$PROJECT_ID/$_SERVICE_NAME:$COMMIT_SHA'
+      - .
+      - '-f'
+      - Dockerfile.api
+    id: Build
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - '$_GCR_HOSTNAME/$PROJECT_ID/$_SERVICE_NAME:$COMMIT_SHA'
+    id: Push
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    args:
+      - run
+      - deploy
+      - $_SERVICE_NAME
+      - '--platform=managed'
+      - '--service-account=$_SERVICE_ACCOUNT'
+      - '--vpc-connector=$_VPC_CONNECTOR'
+      - '--set-cloudsql-instances=$_CLOUD_SQL'
+      - '--port=4000'
+      - '--no-use-http2'
+      - '--allow-unauthenticated'
+      - '--image=$_GCR_HOSTNAME/$PROJECT_ID/$_SERVICE_NAME:$COMMIT_SHA'
+      - >-
+        --labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID,$_LABELS
+      - '--region=$_DEPLOY_REGION'
+      - '--quiet'
+    id: Deploy
+    entrypoint: gcloud
+timeout: 2400s
+images:
+  - '$_GCR_HOSTNAME/$PROJECT_ID/$_SERVICE_NAME'
+options:
+  substitutionOption: ALLOW_LOOSE
+  machineType: 'E2_HIGHCPU_8'
+substitutions:
+  # --- verify every one of these before the first real run ---
+  _SERVICE_ACCOUNT: cloudrun@staging-278118.iam.gserviceaccount.com
+  _CLOUD_SQL: mpao-dev-data-services:asia-east1:mpao-data-mysql-dev-asia-est1-1a
+  _DEPLOY_REGION: asia-east1
+  _GCR_HOSTNAME: asia.gcr.io
+  _VPC_CONNECTOR: memstore-asia-east-1
+  _LABELS: gcb-trigger-id=471130c9-8fb8-4059-88be-91f27ea680c7
+  _TRIGGER_ID: 471130c9-8fb8-4059-88be-91f27ea680c7
+  _PLATFORM: managed
+  _SERVICE_NAME: petty-cash-api
+  _GH_PAT: build-arg-gh_pat
+  # .env is composed from TWO secrets, same order/pattern as payouts-api's
+  # own pipeline: stag-nest-api-global (existing, org-wide shared secret —
+  # common vars every staging NestJS API needs: AUTH_ENDPOINT, JWT_PUB,
+  # JWT_LOGGING, GRANT_TYPE, REDIS_HOST/PORT/DB/PASSWORD/PREFIX, etc.)
+  # fetched first, then this one appended on top so app-specific values can
+  # still override it. This secret only needs petty-cash-api's OWN values:
+  # PORT, DATABASE_URL, SHORT_DOMAIN, APP_NAME, APP_ENV, CLIENT_ID,
+  # CLIENT_SECRET, REDIRECT_URL — whatever's already covered by
+  # stag-nest-api-global doesn't need to be duplicated here. Doesn't exist
+  # yet — create it in Secret Manager before the first deploy.
+  # authjs-public-key is the existing org-wide shared secret (same one
+  # payouts-api/pcs-api use) — petty-cash-api only ever needs the public half
+  # (@pension/midgard verifies tokens, never signs them), so unlike
+  # payouts-api's pipeline this doesn't also fetch authjs-private-key.
+  _ENV_SECRET: petty-cash-api-stag-secrets
+tags:
+  - gcp-cloud-build-deploy-cloud-run
+  - gcp-cloud-build-deploy-cloud-run-managed
+  - petty-cash-api

@@ -1,0 +1,22 @@
+{
+"name": "petty-cash",
+  "private": true,
+  "packageManager": "yarn@1.22.22",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n ui,api -c cyan,magenta \"yarn dev:ui\" \"yarn dev:api\"",
+    "dev:ui": "yarn workspace petty-cash-ui dev",
+    "dev:api": "yarn workspace petty-cash-api start:dev",
+    "build": "yarn workspaces run build",
+    "lint": "yarn workspaces run lint"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  }
+}

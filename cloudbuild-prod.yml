@@ -1,0 +1,135 @@
+steps:
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: 'bash'
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        mkdir -p apps/petty-cash-api/secrets
+        gcloud secrets versions access latest --secret=$_API_GLOBAL_SECRET > apps/petty-cash-api/.env
+        gcloud secrets versions access latest --secret=$_API_ENV_SECRET >> apps/petty-cash-api/.env
+        gcloud secrets versions access latest --secret=global-oauth-public > apps/petty-cash-api/secrets/jwtRS256.key.pub
+    id: SetupEnv-API
+
+  - name: gcr.io/cloud-builders/docker
+    entrypoint: 'bash'
+    args:
+      - -c
+      - |
+        docker build --build-arg=GH_PAT=$$GH_PAT -t $_GCR_HOSTNAME/$PROJECT_ID/$_API_SERVICE_NAME:$COMMIT_SHA -f Dockerfile.api .
+    secretEnv: ['GH_PAT']
+    id: Build-API
+    waitFor: ['SetupEnv-API']
+
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: 'bash'
+    args:
+      - -c
+      - |
+        rm -rf apps/petty-cash-api/.env apps/petty-cash-api/secrets
+    id: Clean-API
+    waitFor: ['Build-API']
+
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: 'bash'
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        gcloud secrets versions access latest --secret=$_UI_ENV_SECRET > apps/petty-cash-ui/.env
+    id: SetupEnv-UI
+    waitFor: ['Clean-API']
+
+  - name: gcr.io/cloud-builders/docker
+    entrypoint: 'bash'
+    args:
+      - -c
+      - |
+        docker build --build-arg=GH_PAT=$$GH_PAT -t $_GCR_HOSTNAME/$PROJECT_ID/$_UI_SERVICE_NAME:$COMMIT_SHA -f Dockerfile.ui .
+    secretEnv: ['GH_PAT']
+    id: Build-UI
+    waitFor: ['SetupEnv-UI']
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - '$_GCR_HOSTNAME/$PROJECT_ID/$_API_SERVICE_NAME:$COMMIT_SHA'
+    id: Push-API
+    waitFor: ['Build-API']
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - '$_GCR_HOSTNAME/$PROJECT_ID/$_UI_SERVICE_NAME:$COMMIT_SHA'
+    id: Push-UI
+    waitFor: ['Build-UI']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - $_API_SERVICE_NAME
+      - '--platform=managed'
+      - '--service-account=$_SERVICE_ACCOUNT'
+      - '--vpc-connector=$_VPC_CONNECTOR'
+      - '--set-cloudsql-instances=$_CLOUD_SQL'
+      - '--port=4000'
+      - '--no-use-http2'
+      - '--allow-unauthenticated'
+      - '--image=$_GCR_HOSTNAME/$PROJECT_ID/$_API_SERVICE_NAME:$COMMIT_SHA'
+      - >-
+        --labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID
+      - '--region=$_DEPLOY_REGION'
+      - '--quiet'
+    id: Deploy-API
+    waitFor: ['Push-API']
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - $_UI_SERVICE_NAME
+      - '--platform=managed'
+      - '--service-account=$_SERVICE_ACCOUNT'
+      - '--port=3000'
+      - '--no-use-http2'
+      - '--allow-unauthenticated'
+      - '--image=$_GCR_HOSTNAME/$PROJECT_ID/$_UI_SERVICE_NAME:$COMMIT_SHA'
+      - >-
+        --labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID
+      - '--region=$_DEPLOY_REGION'
+      - '--quiet'
+    id: Deploy-UI
+    waitFor: ['Push-UI', 'Deploy-API']
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/$PROJECT_ID/secrets/$_GH_PAT_SECRET/versions/latest
+      env: 'GH_PAT'
+
+timeout: 2400s
+images:
+  - '$_GCR_HOSTNAME/$PROJECT_ID/$_API_SERVICE_NAME'
+  - '$_GCR_HOSTNAME/$PROJECT_ID/$_UI_SERVICE_NAME'
+options:
+  substitutionOption: ALLOW_LOOSE
+substitutions:
+  _SERVICE_ACCOUNT: prod-cloudrun@production-147011.iam.gserviceaccount.com
+  _CLOUD_SQL: production-147011:asia-east1:prod-mssql-db
+  _VPC_CONNECTOR: red-connector
+  _GCR_HOSTNAME: asia.gcr.io
+  _PLATFORM: managed
+  _GH_PAT_SECRET: npm-env
+  _API_SERVICE_NAME: mpao-prod-petty-cash-api-run-asia-east-1
+  _API_GLOBAL_SECRET: prod-global-nest-env
+  _API_ENV_SECRET: mpao-prod-petty-cash-api-prod-secret-global
+  _UI_SERVICE_NAME: mpao-prod-petty-cash-ui-run-asia-east-1
+  _DEPLOY_REGION: asia-east1
+  _UI_ENV_SECRET: mpao-prod-petty-cash-ui-secret-asia-east-1
+tags:
+  - gcp-cloud-build-deploy-cloud-run
+  - gcp-cloud-build-deploy-cloud-run-managed
+  - petty-cash-api
+  - petty-cash-ui

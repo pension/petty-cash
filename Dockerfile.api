@@ -1,0 +1,74 @@
+# petty-cash-api only. Build context is the repo ROOT (not apps/petty-cash-api) —
+# yarn v1 has no per-workspace install (no `yarn workspaces focus`), so
+# `yarn install` needs every workspace's package.json present to resolve
+# against the single root yarn.lock, even though this image never builds
+# or ships petty-cash-ui itself.
+#
+# Separate from Dockerfile.ui deliberately, not a --target split in one
+# shared file: this Cloud Build environment doesn't prune un-targeted
+# stages the way BuildKit does (confirmed directly from a real build log —
+# see AGENTS.md), so a single multi-app Dockerfile with --target had BOTH
+# pipelines building BOTH apps' full builder stages on every single push,
+# regardless of which one actually changed. Two files means each pipeline
+# only ever builds its own app — the yarn-install duplication below is a
+# real but much smaller cost than that was.
+
+FROM node:24-alpine AS deps
+
+WORKDIR /home/node
+
+ARG GH_PAT='{{GITHUB_TOKEN}}'
+RUN echo "//npm.pkg.github.com/:_authToken=${GH_PAT}" > .npmrc && \
+    echo "@pension:registry=https://npm.pkg.github.com" >> .npmrc && \
+    echo "strict-peer-dependencies=false" >> .npmrc
+
+COPY package.json yarn.lock ./
+COPY apps/petty-cash-api/package.json apps/petty-cash-api/package.json
+COPY apps/petty-cash-ui/package.json apps/petty-cash-ui/package.json
+# petty-cash-ui's `postinstall` (copies @pension/ui-kit's prebuilt CSS into
+# public/ui-kit.css) runs as part of THIS yarn install regardless of the
+# fact that this image never builds petty-cash-ui — yarn v1 runs every
+# workspace's postinstall hook on any root install. The script file has to
+# already exist on disk for that hook to succeed, not just the package.json
+# that declares it.
+COPY apps/petty-cash-ui/scripts apps/petty-cash-ui/scripts
+RUN yarn install --frozen-lockfile
+
+# ---
+
+FROM deps AS builder
+
+# apps/petty-cash-api/.env + apps/petty-cash-api/secrets/jwtRS256.key.pub (same
+# paths env.ts/AUTH.md use locally) are materialized by
+# cloudbuild-stag-api.yml's SetupEnv step before `docker build` runs, at
+# those same paths under the repo-root build context — this COPY picks
+# them up like any other source.
+COPY . /home/node/
+
+RUN cd apps/petty-cash-api && npx prisma generate --schema=./prisma/schema.prisma
+RUN yarn workspace petty-cash-api build
+
+# ---
+
+# No cloud_sql_proxy binary bundled — Cloud Run's own
+# --set-cloudsql-instances flag (see cloudbuild-stag-api.yml) makes it
+# provision the Cloud SQL Auth Proxy itself and exposes it to the
+# container as a Unix socket; the app image doesn't need to run its own.
+FROM node:24-alpine AS runner
+
+USER node
+WORKDIR /home/node
+
+COPY --from=builder --chown=node:node /home/node/package.json /home/node/yarn.lock /home/node/.npmrc ./
+COPY --from=builder --chown=node:node /home/node/node_modules ./node_modules
+COPY --from=builder --chown=node:node /home/node/apps/petty-cash-api/.env ./
+COPY --from=builder --chown=node:node /home/node/apps/petty-cash-api/secrets ./secrets
+COPY --from=builder --chown=node:node /home/node/apps/petty-cash-api/dist ./dist
+COPY --from=builder --chown=node:node /home/node/apps/petty-cash-api/prisma ./prisma
+
+
+ENV PORT=4000
+
+EXPOSE 4000
+
+CMD ["node", "dist/src/main"]

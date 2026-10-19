@@ -1,0 +1,60 @@
+steps:
+  - name: gcr.io/cloud-builders/gcloud
+    entrypoint: "bash"
+    args:
+      - -c
+      - |
+        gcloud secrets versions access latest --secret=$_ENV_SECRET > apps/petty-cash-ui/.env
+    id: SetupEnv
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - "--build-arg=GH_PAT=$_GH_PAT"
+      - "-t"
+      - "$_GCR_HOSTNAME/$PROJECT_ID/$_SERVICE_NAME:$COMMIT_SHA"
+      - .
+      - "-f"
+      - Dockerfile.ui
+    id: Build
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - "$_GCR_HOSTNAME/$PROJECT_ID/$_SERVICE_NAME:$COMMIT_SHA"
+    id: Push
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    args:
+      - run
+      - deploy
+      - $_SERVICE_NAME
+      - "--platform=managed"
+      - "--service-account=$_SERVICE_ACCOUNT"
+      - "--port=3000"
+      - "--no-use-http2"
+      - "--allow-unauthenticated"
+      - "--image=$_GCR_HOSTNAME/$PROJECT_ID/$_SERVICE_NAME:$COMMIT_SHA"
+      - >-
+        --labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID,gcb-trigger-id=$_TRIGGER_ID,$_LABELS
+      - "--region=$_DEPLOY_REGION"
+      - "--quiet"
+    id: Deploy
+    entrypoint: gcloud
+timeout: 1800s
+images:
+  - "$_GCR_HOSTNAME/$PROJECT_ID/$_SERVICE_NAME"
+options:
+  substitutionOption: ALLOW_LOOSE
+  machineType: "E2_HIGHCPU_8"
+substitutions:
+  _SERVICE_ACCOUNT: cloudrun@staging-278118.iam.gserviceaccount.com
+  _DEPLOY_REGION: asia-northeast1
+  _GCR_HOSTNAME: asia.gcr.io
+  _LABELS: gcb-trigger-id=0d05f24a-0bc9-425f-9a20-eacbbc02bd17
+  _TRIGGER_ID: 0d05f24a-0bc9-425f-9a20-eacbbc02bd17
+  _PLATFORM: managed
+  _SERVICE_NAME: petty-cash-ui
+  _GH_PAT: build-arg-gh_pat
+  _ENV_SECRET: petty-cash-ui-stag-secrets
+tags:
+  - gcp-cloud-build-deploy-cloud-run
+  - gcp-cloud-build-deploy-cloud-run-managed
+  - petty-cash-ui
