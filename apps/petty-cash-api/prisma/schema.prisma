@@ -1,0 +1,230 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Fund {
+  id                     String            @id @map("id") @db.VarChar(40)
+  name                   String            @map("name")
+  currency               String            @default("MVR") @map("currency") @db.VarChar(3)
+  openingBalance         Decimal           @map("opening_balance") @db.Decimal(14, 2)
+  effectiveDate          DateTime          @map("effective_date") @db.Date
+  currentExpectedBalance Decimal           @map("current_expected_balance") @db.Decimal(14, 2)
+  custodian              String            @map("custodian")
+  description            String?           @map("description")
+  createdAt              DateTime          @default(now()) @map("created_at")
+  requests               FloatRequest[]
+  transactions           FundTransaction[]
+  counts                 VaultCount[]
+
+  @@map("funds")
+}
+
+model FloatRequest {
+  id                   String            @id @map("id") @db.VarChar(40)
+  fundId               String            @map("fund_id") @db.VarChar(40)
+  fund                 Fund              @relation(fields: [fundId], references: [id])
+  purpose              String            @map("purpose") @db.Text
+  department           String            @default("General Services") @map("department")
+  requesterId          String            @map("requester_id") @db.VarChar(100)
+  requester            Json              @map("requester")
+  status               String            @default("pending_approval") @map("status") @db.VarChar(40)
+  requestedAmount      Decimal           @map("requested_amount") @db.Decimal(14, 2)
+  approvedAmount       Decimal           @default(0) @map("approved_amount") @db.Decimal(14, 2)
+  declaredCashReturn   Decimal?          @map("declared_cash_return") @db.Decimal(14, 2)
+  totalCashIssued      Decimal           @default(0) @map("total_cash_issued") @db.Decimal(14, 2)
+  estimatedClosingDate DateTime          @map("estimated_closing_date") @db.Date
+  effectiveClosingDate DateTime          @map("effective_closing_date") @db.Date
+  preparedBy           String?           @map("prepared_by")
+  preparedById         String?           @map("prepared_by_id")
+  dynamicsReference    String?           @map("dynamics_reference")
+  rejectionReason      String?           @map("rejection_reason") @db.Text
+  correctionNote       String?           @map("correction_note") @db.Text
+  closedBy             String?           @map("closed_by")
+  closedAt             DateTime?         @map("closed_at")
+  lastReminderAt       DateTime?         @map("last_reminder_at")
+  version              Int               @default(1) @map("version")
+  createdAt            DateTime          @default(now()) @map("created_at")
+  updatedAt            DateTime          @updatedAt @map("updated_at")
+  expenses             Expense[]
+  issuances            CashIssuance[]
+  returns              CashReturn[]
+  timeline             TimelineEvent[]
+  transactions         FundTransaction[]
+
+  @@index([requesterId, status])
+  @@index([status, createdAt])
+  @@index([closedAt])
+  @@map("requests")
+}
+
+model Expense {
+  id                 String       @id @default(uuid()) @map("id") @db.VarChar(40)
+  requestId          String       @map("request_id") @db.VarChar(40)
+  request            FloatRequest @relation(fields: [requestId], references: [id])
+  supplierName       String       @map("supplier_name")
+  category           String?      @map("category")
+  invoiceNumber      String       @map("invoice_number")
+  expenseDate        DateTime     @map("expense_date") @db.Date
+  amount             Decimal      @map("amount") @db.Decimal(14, 2)
+  description        String       @map("description") @db.Text
+  fileId             String?      @unique @map("file_id") @db.VarChar(40)
+  file               ReceiptFile? @relation(fields: [fileId], references: [id])
+  ocrExtracted       Boolean      @default(false) @map("ocr_extracted")
+  ocrConfidence      Int?         @map("ocr_confidence")
+  verificationStatus String       @default("submitted") @map("verification_status")
+  removedAt          DateTime?    @map("removed_at")
+  removedBy          String?      @map("removed_by")
+  createdAt          DateTime     @default(now()) @map("created_at")
+
+  @@index([requestId])
+  @@map("expenses")
+}
+
+model ReceiptFile {
+  id          String   @id @default(uuid()) @map("id") @db.VarChar(40)
+  ownerId     String   @map("owner_id") @db.VarChar(100)
+  storageKey  String   @unique @map("storage_key")
+  fileName    String   @map("file_name")
+  contentType String   @map("content_type")
+  size        Int      @map("size")
+  state       String   @default("uploading") @map("state")
+  createdAt   DateTime @default(now()) @map("created_at")
+  expense     Expense?
+
+  @@index([state, createdAt])
+  @@map("receipt_files")
+}
+
+model CashIssuance {
+  id             String       @id @default(uuid()) @map("id") @db.VarChar(40)
+  requestId      String       @unique @map("request_id") @db.VarChar(40)
+  request        FloatRequest @relation(fields: [requestId], references: [id])
+  amount         Decimal      @map("amount") @db.Decimal(14, 2)
+  issuedBy       String       @map("issued_by")
+  issuedAt       DateTime     @default(now()) @map("issued_at")
+  acknowledgedBy String       @map("acknowledged_by")
+  acknowledgedAt DateTime     @default(now()) @map("acknowledged_at")
+  isAdditional   Boolean      @default(false) @map("is_additional")
+
+  @@map("cash_issuances")
+}
+
+model CashReturn {
+  id             String       @id @default(uuid()) @map("id") @db.VarChar(40)
+  requestId      String       @unique @map("request_id") @db.VarChar(40)
+  request        FloatRequest @relation(fields: [requestId], references: [id])
+  expectedAmount Decimal      @map("expected_amount") @db.Decimal(14, 2)
+  actualAmount   Decimal      @map("actual_amount") @db.Decimal(14, 2)
+  difference     Decimal      @map("difference") @db.Decimal(14, 2)
+  denominations  Json         @map("denominations")
+  receivedBy     String       @map("received_by")
+  returnedBy     String       @map("returned_by")
+  returnDate     DateTime     @default(now()) @map("return_date")
+  acknowledged   Boolean      @default(true) @map("acknowledged")
+
+  @@map("cash_returns")
+}
+
+model FundTransaction {
+  sequence       Int           @id @default(autoincrement()) @map("sequence")
+  id             String        @unique @default(uuid()) @map("id") @db.VarChar(40)
+  fundId         String        @map("fund_id") @db.VarChar(40)
+  fund           Fund          @relation(fields: [fundId], references: [id])
+  type           String        @map("type") @db.VarChar(40)
+  amount         Decimal       @map("amount") @db.Decimal(14, 2)
+  runningBalance Decimal       @map("running_balance") @db.Decimal(14, 2)
+  date           DateTime      @default(now()) @map("date")
+  requestId      String?       @map("request_id") @db.VarChar(40)
+  request        FloatRequest? @relation(fields: [requestId], references: [id])
+  reference      String        @map("reference")
+  recordedBy     String        @map("recorded_by")
+  actorId        String        @map("actor_id")
+  notes          String?       @map("notes") @db.Text
+  operationKey   String        @unique @map("operation_key")
+
+  @@index([fundId, date])
+  @@map("fund_transactions")
+}
+
+model VaultCount {
+  sequence        Int       @id @default(autoincrement()) @map("sequence")
+  id              String    @unique @default(uuid()) @map("id") @db.VarChar(40)
+  fundId          String    @map("fund_id") @db.VarChar(40)
+  fund            Fund      @relation(fields: [fundId], references: [id])
+  countDate       DateTime  @default(now()) @map("count_date")
+  expectedBalance Decimal   @map("expected_balance") @db.Decimal(14, 2)
+  actualCashCount Decimal   @map("actual_cash_count") @db.Decimal(14, 2)
+  difference      Decimal   @map("difference") @db.Decimal(14, 2)
+  denominations   Json      @map("denominations")
+  countedBy       String    @map("counted_by")
+  notes           String?   @map("notes") @db.Text
+  status          String    @map("status")
+  resolvedBy      String?   @map("resolved_by")
+  resolvedAt      DateTime? @map("resolved_at")
+  resolutionNotes String?   @map("resolution_notes") @db.Text
+  ledgerSequence  Int       @map("ledger_sequence")
+
+  @@map("vault_counts")
+}
+
+model TimelineEvent {
+  sequence    Int          @id @default(autoincrement()) @map("sequence")
+  id          String       @unique @default(uuid()) @map("id") @db.VarChar(40)
+  requestId   String       @map("request_id") @db.VarChar(40)
+  request     FloatRequest @relation(fields: [requestId], references: [id])
+  type        String       @map("type")
+  title       String       @map("title")
+  description String       @map("description") @db.Text
+  actorId     String       @map("actor_id")
+  actorName   String       @map("actor_name")
+  actorRole   String       @map("actor_role")
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  @@map("timeline_events")
+}
+
+model VoucherCounter {
+  year  Int @id @map("year")
+  value Int @default(0) @map("value")
+
+  @@map("voucher_counters")
+}
+
+model IdempotencyRecord {
+  id          String   @id @map("id") @db.VarChar(64)
+  fingerprint String   @map("fingerprint") @db.VarChar(64)
+  result      Json?    @map("result")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("idempotencies")
+}
+
+model Notification {
+  id          String             @id @default(uuid()) @map("id") @db.VarChar(40)
+  title       String             @map("title")
+  text        String             @map("text") @db.Text
+  recipientId String?            @map("recipient_id") @db.VarChar(100)
+  audience    String?            @map("audience")
+  url         String             @map("url")
+  dedupeKey   String             @unique @map("dedupe_key")
+  createdAt   DateTime           @default(now()) @map("created_at")
+  reads       NotificationRead[]
+
+  @@index([recipientId, createdAt])
+  @@map("notifications")
+}
+
+model NotificationRead {
+  notificationId String       @map("notification_id") @db.VarChar(40)
+  notification   Notification @relation(fields: [notificationId], references: [id])
+  userId         String       @map("user_id") @db.VarChar(100)
+  readAt         DateTime     @default(now()) @map("read_at")
+
+  @@id([notificationId, userId])
+  @@map("notification_reads")
+}

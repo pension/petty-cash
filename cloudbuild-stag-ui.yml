@@ -7,6 +7,8 @@ steps:
         gcloud secrets versions access latest --secret=$_ENV_SECRET > apps/petty-cash-ui/.env
     id: SetupEnv
   - name: gcr.io/cloud-builders/docker
+    # Skip the independent local development stage when building runner.
+    env: ['DOCKER_BUILDKIT=1']
     args:
       - build
       - "--build-arg=GH_PAT=$_GH_PAT"

@@ -10,6 +10,8 @@ steps:
         gcloud secrets versions access latest --secret=authjs-public-key > apps/petty-cash-api/secrets/jwtRS256.key.pub
     id: SetupEnv
   - name: gcr.io/cloud-builders/docker
+    # Skip the independent local development stage when building runner.
+    env: ['DOCKER_BUILDKIT=1']
     args:
       - build
       - '--build-arg=GH_PAT=$_GH_PAT'
@@ -67,7 +69,7 @@ substitutions:
   # JWT_LOGGING, GRANT_TYPE, REDIS_HOST/PORT/DB/PASSWORD/PREFIX, etc.)
   # fetched first, then this one appended on top so app-specific values can
   # still override it. This secret only needs petty-cash-api's OWN values:
-  # PORT, DATABASE_URL, SHORT_DOMAIN, APP_NAME, APP_ENV, CLIENT_ID,
+  # PORT, DATABASE_URL, MPAO_ENTITY_ID, GCS_RECEIPT_BUCKET, FILE_STORAGE, APP_NAME, APP_ENV, CLIENT_ID,
   # CLIENT_SECRET, REDIRECT_URL — whatever's already covered by
   # stag-nest-api-global doesn't need to be duplicated here. Doesn't exist
   # yet — create it in Secret Manager before the first deploy.

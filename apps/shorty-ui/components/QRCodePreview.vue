@@ -36,7 +36,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { buildQrSvg } from '@shorty/qr-render';
+import { buildQrSvg } from '@petty-cash/qr-render';
 
 const props = withDefaults(
   defineProps<{

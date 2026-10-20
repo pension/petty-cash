@@ -1,0 +1,80 @@
+[
+  {
+    "key": "note1000",
+    "label": "MVR 1,000",
+    "value": 1000.0,
+    "minorUnits": 100000
+  },
+  {
+    "key": "note500",
+    "label": "MVR 500",
+    "value": 500.0,
+    "minorUnits": 50000
+  },
+  {
+    "key": "note100",
+    "label": "MVR 100",
+    "value": 100.0,
+    "minorUnits": 10000
+  },
+  {
+    "key": "note50",
+    "label": "MVR 50",
+    "value": 50.0,
+    "minorUnits": 5000
+  },
+  {
+    "key": "note20",
+    "label": "MVR 20",
+    "value": 20.0,
+    "minorUnits": 2000
+  },
+  {
+    "key": "note10",
+    "label": "MVR 10",
+    "value": 10.0,
+    "minorUnits": 1000
+  },
+  {
+    "key": "note5",
+    "label": "MVR 5",
+    "value": 5.0,
+    "minorUnits": 500
+  },
+  {
+    "key": "coin2",
+    "label": "MVR 2",
+    "value": 2.0,
+    "minorUnits": 200
+  },
+  {
+    "key": "coin1",
+    "label": "MVR 1",
+    "value": 1.0,
+    "minorUnits": 100
+  },
+  {
+    "key": "coin0_5",
+    "label": "MVR 0.50",
+    "value": 0.5,
+    "minorUnits": 50
+  },
+  {
+    "key": "coin0_25",
+    "label": "MVR 0.25",
+    "value": 0.25,
+    "minorUnits": 25
+  },
+  {
+    "key": "coin0_10",
+    "label": "MVR 0.10",
+    "value": 0.1,
+    "minorUnits": 10
+  },
+  {
+    "key": "coin0_1",
+    "label": "MVR 0.01",
+    "value": 0.01,
+    "minorUnits": 1
+  }
+]

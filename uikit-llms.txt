@@ -1,6 +1,6 @@
 # UI Library Component & Utility Index
 
-Concise directory linking detailed usage guides for all @pension/ui-kit components, helpers, directives, and composables.
+Concise directory linking detailed usage guides for all @pension/ui-kit components, layout patterns, helpers, directives, and composables.
 
 ## Composition Principles
 
@@ -258,7 +258,7 @@ const showModalWindow = ref(false);
 
 ## 5. Page header with Page Status and Buttons
 
-Use this template when building modal dialogs with trigger buttons.
+Use this template when building headers with entity status badges and workflow actions.
 
 ```vue
 <template>
@@ -302,27 +302,140 @@ Use this template when building modal dialogs with trigger buttons.
 					@button-click="openDeregisterModal"
 					:disabled="employer.status === 'deregistered'"
 				/>
-				<BackButton />
 			</div>
 		</div>
 	</header>
+</template>
 
-	<script setup lang="ts">
-		import {
-			CheckBadgeIcon,
-			ClockIcon,
-			XCircleIcon,
-		} from "@heroicons/vue/20/solid";
-		import { PoPageTitle, PoPageStatus, PoButton } from "@pension/ui-kit";
-	</script>
+<script setup lang="ts">
+import {
+	CheckBadgeIcon,
+	ClockIcon,
+	XCircleIcon,
+} from "@heroicons/vue/20/solid";
+import { PoPageTitle, PoPageStatus, PoButton } from "@pension/ui-kit";
+</script>
+```
+
+---
+
+## 6. Batch Actions & Selection Bar
+
+When implementing row-level bulk operations (approving drafts, batch exporting, batch status updates), combine `PoTableCheckbox` with a sticky/top selection banner:
+
+```vue
+<template>
+	<!-- Bulk Actions Banner (renders when items are selected) -->
+	<div
+		v-if="selectedIds.length > 0"
+		class="bg-sky-50 border border-sky-200 rounded-xl px-4 py-3 flex items-center justify-between"
+	>
+		<div class="flex items-center space-x-2">
+			<span class="bg-sky-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
+				{{ selectedIds.length }}
+			</span>
+			<span class="text-sm font-medium text-sky-900">Items Selected</span>
+		</div>
+		<div class="flex items-center space-x-2">
+			<PoButton :label="\`Approve (\${selectedIds.length})\`" action-type="primary" @button-click="batchApprove" />
+			<PoButton :label="\`Reject (\${selectedIds.length})\`" action-type="danger" @button-click="batchReject" />
+			<PoButton label="Clear" action-type="ghost" @button-click="selectedIds = []" />
+		</div>
+	</div>
+
+	<!-- Checkbox Column inside PoTable slot -->
+	<template #td="{ item }">
+		<td data-title="Select" class="w-10">
+			<PoTableCheckbox
+				:item-id="item.id"
+				:is-checked="selectedIds.includes(item.id)"
+				@checkbox-clicked="handleCheckboxToggle"
+			/>
+		</td>
+		...
+	</template>
 </template>
 ```
+
+---
+
+## 7. Split Layout Entity Detail (Main Info + Sidebar)
+
+For detail views of files, cases, claims, or members:
+- **Left 2 Columns (`lg:col-span-2`)**: Core entity attributes using `PoDescriptionList :columns="true"`, plus child records table.
+- **Right 1 Column**: Assigned officer `PoProfileCard`, quick actions, and sequential `PoTimeline`.
+
+```vue
+<template>
+	<PoContentArea>
+		<header class="lg:flex lg:items-end mb-4">
+			<PoPageTitle class="grow" :stand-alone="true" :label="entity.name" :description="entity.summary" />
+			<PoPageStatus :icon="CheckBadgeIcon" label="Active" color="green" />
+		</header>
+
+		<div class="space-y-4">
+			<PoProgressTracker :items="stages" :page-mode="true" />
+			<PoStatsBlock :items="kpiStats" />
+
+			<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+				<div class="lg:col-span-2 space-y-4">
+					<PoCard class="p-5">
+						<PoHeading text="Details" type="h3" size="md" />
+						<PoDescriptionList :columns="true">
+							<template #content>
+								<div><dt>Registration #</dt><dd>{{ entity.reg }}</dd></div>
+								<div><dt>Sector</dt><dd>{{ entity.sector }}</dd></div>
+							</template>
+						</PoDescriptionList>
+					</PoCard>
+					<PoCard>
+						<template #content>
+							<PoTable :thead="tableHead" :tbody="childRecords" />
+						</template>
+					</PoCard>
+				</div>
+				<div class="space-y-4">
+					<PoCard class="p-4 space-y-3">
+						<PoHeading text="Assigned Officer" type="h4" size="sm" />
+						<PoProfileCard :profile="officer" card-size="sm" />
+					</PoCard>
+					<PoCard class="p-4 space-y-3">
+						<PoHeading text="Activity Timeline" type="h4" size="sm" />
+						<PoTimeline :items="events" />
+					</PoCard>
+				</div>
+			</div>
+		</div>
+	</PoContentArea>
+</template>
+```
+
+---
+
+# Agentic AI Layout Construction Rules
+
+When an Agentic AI designs or generates layouts using `@pension/ui-kit`:
+1. **Always wrap complete pages in `<PoContentArea>`**.
+2. **Always structure page headers with `<header class="lg:flex lg:items-end mb-4">`** containing `<PoPageTitle :stand-alone="true" />` on the left and action buttons on the right.
+3. **Always use `<PoCard class="p-3 pl-4">`** for the list search/filter/pagination toolbar.
+4. **Always wrap `<PoTable>` inside `<PoCard>` with `<template #content>`**, and render `<PoEmpty>` when filtered items are empty.
+5. **Always use `<PoTableAction>`** for row-level actions (`view`, `edit`, `delete`, `icon`), never unstyled buttons.
+6. **Always format Maldivian currency with `<Rufiyaa :amount="..." />`** and dates with `formatDate(...)`.
+7. **Always use `<PoDescriptionList :columns="true">`** for metadata pairs (`<dt>` / `<dd>`).
+8. **Always use `<PoStatsBlock>`** for metric cards and `<PoStatusPill>` / `<PoPageStatus>` for badges.
+9. **Never use custom prefixes like `po:` in consuming application code** — use standard Tailwind utilities.
+
 
 
 ---
 
 ## Library Reference Directory
 
+- **[DashboardPatterns](https://ui-kit-dev.mpao.mv/uikit-llms/DashboardPatterns.txt)**: Dashboard layouts provide landing views for administrative portals, displaying real-time metrics, high-priority work queues, and system status alerts.
+- **[DetailPatterns](https://ui-kit-dev.mpao.mv/uikit-llms/DetailPatterns.txt)**: Entity detail views present rich information about a single record (e.g. an Employer file, a Member profile, a Pension Claim, or a Compliance Case).
+- **[FormPatterns](https://ui-kit-dev.mpao.mv/uikit-llms/FormPatterns.txt)**: Forms are where users submit data into system workflows (new employments, claims submissions, profile modifications, contribution adjustments).
+- **[ListingPatterns](https://ui-kit-dev.mpao.mv/uikit-llms/ListingPatterns.txt)**: Listing pages are the core workspace of business applications in the Pension ecosystem. They enable users to browse entities, perform multi-parameter filteri...
+- **[ModalDrawerPatterns](https://ui-kit-dev.mpao.mv/uikit-llms/ModalDrawerPatterns.txt)**: Modals and Slideovers allow users to inspect information or complete actions without losing context on their current page.
 - **[PoAppLink](https://ui-kit-dev.mpao.mv/uikit-llms/PoAppLink.txt)**: The AppLink component renders navigation links with theme styling, routing support, and custom transition effects.
 - **[PoButton](https://ui-kit-dev.mpao.mv/uikit-llms/PoButton.txt)**: The Button component triggers actions on click and supports various sizes, colors, loading states, and custom icon templates.
 - **[PoTableAction](https://ui-kit-dev.mpao.mv/uikit-llms/PoTableAction.txt)**: The TableAction component displays action triggers specifically optimized for data table row operations.
@@ -339,7 +452,7 @@ Use this template when building modal dialogs with trigger buttons.
 - **[PoStatsBlock](https://ui-kit-dev.mpao.mv/uikit-llms/PoStatsBlock.txt)**: The StatsBlock component structures metric stats cards in a grid format.
 - **[PoTable](https://ui-kit-dev.mpao.mv/uikit-llms/PoTable.txt)**: The Table component renders rich data tables with pagination, sorting, and row selection.
 - **[PoTextExcerpt](https://ui-kit-dev.mpao.mv/uikit-llms/PoTextExcerpt.txt)**: The TextExcerpt component truncates long paragraphs with custom 'Read More' expand triggers.
-- **[PoTimeline](https://ui-kit-dev.mpao.mv/uikit-llms/PoTimeline.txt)**: The Timeline component displays chronological events in a vertical line layout.
+- **[PoTimeline](https://ui-kit-dev.mpao.mv/uikit-llms/PoTimeline.txt)**: The Timeline component displays chronological events in either a vertical linear layout (variant="default") or a rich activity card feed (variant="activity").
 - **[PoTree](https://ui-kit-dev.mpao.mv/uikit-llms/PoTree.txt)**: The Tree component visualizes hierarchical tree data structures with collapsible branches.
 - **[PoCardSearch](https://ui-kit-dev.mpao.mv/uikit-llms/PoCardSearch.txt)**: The CardSearch component renders a search input styled for insertion inside card headers.
 - **[PoCheckbox](https://ui-kit-dev.mpao.mv/uikit-llms/PoCheckbox.txt)**: The Checkbox component allows users to toggle boolean states or select multiple items from a list.
@@ -397,11 +510,11 @@ Use this template when building modal dialogs with trigger buttons.
 - **[PoProfileSwitcher](https://ui-kit-dev.mpao.mv/uikit-llms/PoProfileSwitcher.txt)**: The ProfileSwitcher component handles account switching dropdowns in the top navigation bar.
 - **[PoSidebarDrawer](https://ui-kit-dev.mpao.mv/uikit-llms/PoSidebarDrawer.txt)**: The SidebarDrawer component renders responsive sidebar navigation with collapsable groups.
 - **[PoTopBar](https://ui-kit-dev.mpao.mv/uikit-llms/PoTopBar.txt)**: The TopBar component provides the main application header containing branding, search, and user controls.
-- **[Debounce](https://ui-kit-dev.mpao.mv/uikit-llms/Debounce.txt)**: The Debounce helper utility prevents a function from being called multiple times in rapid succession, deferring execution until a delay h...
+- **[Debounce](https://ui-kit-dev.mpao.mv/uikit-llms/Debounce.txt)**: The Debounce helper utility prevents a function from being called multiple times in rapid succession, deferring execution until a delay has elapsed.
 - **[FormatDate](https://ui-kit-dev.mpao.mv/uikit-llms/FormatDate.txt)**: The FormatDate utility formats ISO date strings or Date objects into human-readable date formats.
 - **[FormatMoney](https://ui-kit-dev.mpao.mv/uikit-llms/FormatMoney.txt)**: The FormatMoney utility formats numeric values into styled Maldivian Rufiyaa (MVR) currency presentation format.
 - **[SafeFormatDate](https://ui-kit-dev.mpao.mv/uikit-llms/SafeFormatDate.txt)**: The SafeFormatDate utility safely parses and formats dates, returning fallback placeholders if the date value is invalid.
 - **[UseEventBus](https://ui-kit-dev.mpao.mv/uikit-llms/UseEventBus.txt)**: The UseEventBus composable provides a global event bus instance to publish and subscribe to app-wide events.
-- **[UseThaanaKeyboard](https://ui-kit-dev.mpao.mv/uikit-llms/UseThaanaKeyboard.txt)**: The UseThaanaKeyboard composable handles custom layout inputs for the Dhivehi (Thaana) script.
+- **[UseThaanaKeyboard](https://ui-kit-dev.mpao.mv/uikit-llms/UseThaanaKeyboard.txt)**: The useThaanaKeyboard composable provides transliteration for Dhivehi (Thaana) script using standard English keyboards.
 - **[UseToastify](https://ui-kit-dev.mpao.mv/uikit-llms/UseToastify.txt)**: The UseToastify composable manages transient, non-blocking toast notifications in the application.
 - **[hasPermission](https://ui-kit-dev.mpao.mv/uikit-llms/hasPermission.txt)**: The HasPermission custom directive checks user access permissions to dynamically show or hide DOM elements.

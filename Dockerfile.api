@@ -1,17 +1,36 @@
+# syntax=docker/dockerfile:1
+FROM node:22-alpine AS development
+RUN apk add --no-cache openssl
+WORKDIR /workspace
+
+COPY package.json yarn.lock ./
+COPY packages/denominations ./packages/denominations
+COPY apps/petty-cash-api/package.json ./apps/petty-cash-api/package.json
+COPY apps/petty-cash-ui/package.json ./apps/petty-cash-ui/package.json
+COPY apps/petty-cash-ui/scripts ./apps/petty-cash-ui/scripts
+COPY apps/petty-cash-api/prisma ./apps/petty-cash-api/prisma
+
+# Registry credentials are available only during installation, never in an image layer.
+RUN --mount=type=secret,id=gh_pat,required=true \
+    export GH_PAT="$(cat /run/secrets/gh_pat)" && \
+    printf '%s\n' '@pension:registry=https://npm.pkg.github.com' '//npm.pkg.github.com/:_authToken=${GH_PAT}' > .npmrc && \
+    yarn install --frozen-lockfile && \
+    rm .npmrc && \
+    yarn workspace petty-cash-api db:generate
+
+# Source is bind-mounted by docker-env; Linux dependency volumes hide host dependencies.
+ENV NODE_ENV=development
+EXPOSE 4000
+
+# Production build stages.
 # petty-cash-api only. Build context is the repo ROOT (not apps/petty-cash-api) —
 # yarn v1 has no per-workspace install (no `yarn workspaces focus`), so
 # `yarn install` needs every workspace's package.json present to resolve
 # against the single root yarn.lock, even though this image never builds
 # or ships petty-cash-ui itself.
 #
-# Separate from Dockerfile.ui deliberately, not a --target split in one
-# shared file: this Cloud Build environment doesn't prune un-targeted
-# stages the way BuildKit does (confirmed directly from a real build log —
-# see AGENTS.md), so a single multi-app Dockerfile with --target had BOTH
-# pipelines building BOTH apps' full builder stages on every single push,
-# regardless of which one actually changed. Two files means each pipeline
-# only ever builds its own app — the yarn-install duplication below is a
-# real but much smaller cost than that was.
+# Separate API/UI files keep their production build pipelines independent.
+# BuildKit selects only the stages required by the requested target.
 
 FROM node:24-alpine AS deps
 
@@ -23,6 +42,7 @@ RUN echo "//npm.pkg.github.com/:_authToken=${GH_PAT}" > .npmrc && \
     echo "strict-peer-dependencies=false" >> .npmrc
 
 COPY package.json yarn.lock ./
+COPY packages/denominations packages/denominations
 COPY apps/petty-cash-api/package.json apps/petty-cash-api/package.json
 COPY apps/petty-cash-ui/package.json apps/petty-cash-ui/package.json
 # petty-cash-ui's `postinstall` (copies @pension/ui-kit's prebuilt CSS into
@@ -59,8 +79,9 @@ FROM node:24-alpine AS runner
 USER node
 WORKDIR /home/node
 
-COPY --from=builder --chown=node:node /home/node/package.json /home/node/yarn.lock /home/node/.npmrc ./
+COPY --from=builder --chown=node:node /home/node/package.json /home/node/yarn.lock ./
 COPY --from=builder --chown=node:node /home/node/node_modules ./node_modules
+COPY --from=builder --chown=node:node /home/node/packages ./packages
 COPY --from=builder --chown=node:node /home/node/apps/petty-cash-api/.env ./
 COPY --from=builder --chown=node:node /home/node/apps/petty-cash-api/secrets ./secrets
 COPY --from=builder --chown=node:node /home/node/apps/petty-cash-api/dist ./dist

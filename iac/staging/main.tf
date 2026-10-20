@@ -8,7 +8,7 @@ locals {
   trigger_branch_name = "staging"
 
   # One GitHub repo, two deployable apps (petty-cash-api, petty-cash-ui) built from
-  # the same Dockerfile via different --target values (see Dockerfile /
+  # separate Dockerfile.api / Dockerfile.ui files (see
   # cloudbuild-stag*.yml) — each needs its own trigger + yaml path, since
   # this org's cloudbuild_trigger module has no path-filter support, so
   # every push to `staging` fires BOTH triggers regardless of which app

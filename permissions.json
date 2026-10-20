@@ -1,148 +1,178 @@
 {
-"app": "petty-cash-api",
+  "app": "petty-cash",
   "permissions": [
     {
-      "subject": "links",
-      "action": "findAll",
-      "description": "View all short links",
-      "organisation": "Maldives Pension Administration Office"
-    },
-    {
-      "subject": "links",
-      "action": "findOne",
-      "description": "View a short link",
-      "organisation": "Maldives Pension Administration Office"
-    },
-    {
-      "subject": "links",
+      "subject": "idempotency",
       "action": "create",
-      "description": "Create short links",
+      "description": "Obtain a server-generated retry key for financial operations",
       "organisation": "Maldives Pension Administration Office"
     },
     {
-      "subject": "links",
-      "action": "update",
-      "description": "Update short links",
+      "subject": "access",
+      "action": "get",
+      "description": "View application access and capabilities",
       "organisation": "Maldives Pension Administration Office"
     },
     {
-      "subject": "links",
-      "action": "remove",
-      "description": "Delete short links",
+      "subject": "requests",
+      "action": "list",
+      "description": "List petty cash requests",
       "organisation": "Maldives Pension Administration Office"
     },
     {
-      "subject": "qrCodes",
-      "action": "findAll",
-      "description": "View all QR codes",
+      "subject": "requests",
+      "action": "get",
+      "description": "View petty cash request details",
       "organisation": "Maldives Pension Administration Office"
     },
     {
-      "subject": "qrCodes",
-      "action": "findOne",
-      "description": "View a QR code",
-      "organisation": "Maldives Pension Administration Office"
-    },
-    {
-      "subject": "qrCodes",
+      "subject": "requests",
       "action": "create",
-      "description": "Create QR codes",
+      "description": "Create a petty cash request",
       "organisation": "Maldives Pension Administration Office"
     },
     {
-      "subject": "qrCodes",
-      "action": "update",
-      "description": "Update QR codes",
+      "subject": "requests",
+      "action": "edit",
+      "description": "Edit an own pending request",
       "organisation": "Maldives Pension Administration Office"
     },
     {
-      "subject": "qrCodes",
-      "action": "remove",
-      "description": "Delete QR codes",
+      "subject": "approvals",
+      "action": "authorize",
+      "description": "Approve a petty cash request",
       "organisation": "Maldives Pension Administration Office"
     },
     {
-      "subject": "qrCodes",
-      "action": "render",
-      "description": "Render and download QR codes",
+      "subject": "approvals",
+      "action": "reject",
+      "description": "Reject a petty cash request",
       "organisation": "Maldives Pension Administration Office"
     },
     {
-      "subject": "templates",
-      "action": "findAll",
-      "description": "View all QR templates",
+      "subject": "disbursements",
+      "action": "notifycollection",
+      "description": "Prepare cash and notify the requester to collect it",
       "organisation": "Maldives Pension Administration Office"
     },
     {
-      "subject": "templates",
-      "action": "findOne",
-      "description": "View a QR template",
+      "subject": "disbursements",
+      "action": "confirmreceipt",
+      "description": "Confirm collection of own petty cash",
       "organisation": "Maldives Pension Administration Office"
     },
     {
-      "subject": "templates",
-      "action": "create",
-      "description": "Create QR templates",
+      "subject": "expenses",
+      "action": "addexpense",
+      "description": "Add receipt expenses to own request",
       "organisation": "Maldives Pension Administration Office"
     },
     {
-      "subject": "templates",
-      "action": "update",
-      "description": "Update QR templates",
+      "subject": "expenses",
+      "action": "removeexpense",
+      "description": "Remove receipt expenses from own request",
       "organisation": "Maldives Pension Administration Office"
     },
     {
-      "subject": "templates",
-      "action": "remove",
-      "description": "Delete QR templates",
+      "subject": "settlements",
+      "action": "settle",
+      "description": "Submit own request for settlement",
       "organisation": "Maldives Pension Administration Office"
     },
     {
-      "subject": "frames",
-      "action": "findAll",
-      "description": "View all QR frames",
+      "subject": "settlements",
+      "action": "returnforcorrection",
+      "description": "Return a settlement for correction",
       "organisation": "Maldives Pension Administration Office"
     },
     {
-      "subject": "frames",
-      "action": "findOne",
-      "description": "View a QR frame",
+      "subject": "settlements",
+      "action": "finalize",
+      "description": "Finalize and close a settlement",
       "organisation": "Maldives Pension Administration Office"
     },
     {
-      "subject": "frames",
-      "action": "create",
-      "description": "Create QR frames",
+      "subject": "fund",
+      "action": "get",
+      "description": "View the petty cash fund",
       "organisation": "Maldives Pension Administration Office"
     },
     {
-      "subject": "frames",
-      "action": "update",
-      "description": "Update QR frames",
+      "subject": "fund",
+      "action": "transactions",
+      "description": "View vault ledger transactions",
       "organisation": "Maldives Pension Administration Office"
     },
     {
-      "subject": "frames",
-      "action": "remove",
-      "description": "Delete QR frames",
+      "subject": "fund",
+      "action": "topup",
+      "description": "Record a vault cash top-up",
       "organisation": "Maldives Pension Administration Office"
     },
     {
-      "subject": "analytics",
-      "action": "getGlobal",
-    "description": "View global petty-cash analytics",
+      "subject": "vaultcounts",
+      "action": "list",
+      "description": "List vault cash counts",
       "organisation": "Maldives Pension Administration Office"
     },
     {
-      "subject": "analytics",
-      "action": "getForLink",
-      "description": "View analytics for a short link",
+      "subject": "vaultcounts",
+      "action": "recordcount",
+      "description": "Record a vault cash count",
       "organisation": "Maldives Pension Administration Office"
     },
     {
-      "subject": "analytics",
-      "action": "getForQrCode",
-      "description": "View analytics for a QR code",
+      "subject": "vaultcounts",
+      "action": "resolve",
+      "description": "Resolve a vault count discrepancy",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "files",
+      "action": "upload",
+      "description": "Upload a receipt attachment",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "files",
+      "action": "download",
+      "description": "Download a protected receipt attachment",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "notifications",
+      "action": "list",
+      "description": "View notifications",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "notifications",
+      "action": "markread",
+      "description": "Mark a notification as read",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "notifications",
+      "action": "sendreminder",
+      "description": "Send a settlement reminder",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "statistics",
+      "action": "get",
+      "description": "View petty cash statistics",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "reports",
+      "action": "reconciliation",
+      "description": "View reconciliation report data",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "ocr",
+      "action": "receipt",
+      "description": "Extract editable receipt details with Google AI",
       "organisation": "Maldives Pension Administration Office"
     }
   ]

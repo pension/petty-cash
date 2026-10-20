@@ -32,3 +32,9 @@ override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+
+# Private local receipts
+apps/petty-cash-api/var/
+
+# Service-account credentials (public JWT verification keys remain tracked).
+**/secrets/*.json

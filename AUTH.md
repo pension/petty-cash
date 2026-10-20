@@ -1,3 +1,21 @@
+# Petty Cash authentication and MPAO access
+
+Petty Cash UI uses a PUBLIC PKCE client. Never put a client secret in Nuxt public runtime configuration; confidential secrets belong only in the API. The generic examples below are historical integration notes.
+
+Petty Cash controllers use `IdentityGuard` and the existing EntityGuard pattern from verification-api. Configure `MPAO_ENTITY_ID` to the verified numeric Bifrost entity ID; the guard compares the active `transacting_as` value. Controller/action permissions are enforced with PermissionGuard. ActorPipe uses the same IdentityService evaluator for capabilities and allowedActions, including the standard APP_ENV=development bypass. Bifrost `/me` remains the sole identity endpoint. The UI consumes Midgard's identity state and calls `/access` only for application authorization metadata. Business routes have no `/api/float` prefix; module-provided Midgard routes retain their own paths.
+
+## Application identifier
+
+Use `APP_NAME=petty-cash` for the machine identifier and **Petty Cash** for the display name. Midgard uses APP_NAME literally; it does not slugify it. Controller/action permissions use keys such as `petty-cash.requests.create` and `petty-cash.approvals.authorize`. After editing the API environment, recreate its Compose container to reload injected values.
+
+## Application permissions
+
+Use `IdentityGuard`, `EntityGuard`, then `PermissionGuard`. Permission keys follow `{APP_NAME}.{ControllerName without Controller}.{handlerMethodName}`, for example `petty-cash.requests.create`. Store all permission keys in lowercase. Midgard compares case-insensitively; its sync endpoint still exposes original TypeScript names as metadata. The JSON and SQL catalogs normalize those names. The old four custom role keys are removed.
+
+`APP_ENV=development` bypasses permission checks as in contribution-api and contribution-ui. The UI consumes server-calculated capabilities and allowedActions, so it follows the same environment behavior. Identity, MPAO selection, ownership and financial/workflow checks still apply. Production permission tests must use APP_ENV=production; NODE_ENV alone does not control this behavior. The installed library reads APP_ENV from the API .env file.
+
+See [permission setup](docs/PERMISSIONS.md) for the bulk SQL, role grouping and assignment steps. The SQL creates definitions and a role only; it does not grant anyone access.
+
 # Auth Implementation Guide (Bifrost)
 
 How to wire up authentication against `bifrost` on a **fresh** Nuxt + NestJS project, direct-HTTP (no gateway/BFF like `siraathu`), written from an actual from-scratch implementation on `petty-cash-ui`/`petty-cash-api`. Every gotcha below was hit for real, not theorized — this is the order that avoids them.
@@ -75,7 +93,7 @@ import { IdentityModule } from '@pension/midgard';
 
 @Module({
   imports: [
-    IdentityModule.forRoot({ <your-app-key>: ['read:user'] }), // declare this app's scopes
+    IdentityModule.forRoot({ 'petty-cash': ['read:user'] }), // declare this app's scopes
   ],
 })
 export class AppModule {}

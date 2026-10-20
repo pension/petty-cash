@@ -18,3 +18,10 @@ apps/petty-cash-ui/.output
 # ${GH_PAT}" (yarn's own config-env substitution, not Docker's ARG
 # substitution — GH_PAT isn't set as an actual env var inside the build).
 .npmrc
+
+**/var/receipts
+**/test
+**/*.spec.ts
+
+# Mount storage credentials at runtime; never bake service-account keys into images.
+**/secrets/*.json

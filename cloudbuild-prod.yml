@@ -12,6 +12,8 @@ steps:
     id: SetupEnv-API
 
   - name: gcr.io/cloud-builders/docker
+    # Skip the independent local development stage when building runner.
+    env: ['DOCKER_BUILDKIT=1']
     entrypoint: 'bash'
     args:
       - -c
@@ -41,6 +43,8 @@ steps:
     waitFor: ['Clean-API']
 
   - name: gcr.io/cloud-builders/docker
+    # Skip the independent local development stage when building runner.
+    env: ['DOCKER_BUILDKIT=1']
     entrypoint: 'bash'
     args:
       - -c

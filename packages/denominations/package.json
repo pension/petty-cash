@@ -1,0 +1,7 @@
+{
+  "name": "@petty-cash/denominations",
+  "version": "0.0.1",
+  "private": true,
+  "main": "definitions.json",
+  "types": "index.d.ts"
+}
