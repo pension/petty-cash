@@ -34,7 +34,7 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     public: {
-      apiBase: process.env.PETTY_CASH_API_URL || 'https://petty-cash-api.mpao.mv',
+      apiBase: process.env.PETTY_CASH_API_URL || 'https://petty-cash-api-stag.mpao.mv',
       // @pension/midgard-nuxt — reusing the shared local-dev bifrost client
       // that payouts-ui and pcs-ui also log in against.
       auth_url: process.env.AUTH_URL,
