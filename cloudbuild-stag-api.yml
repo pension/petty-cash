@@ -6,8 +6,10 @@ steps:
       - |
         mkdir -p apps/petty-cash-api/secrets &&
         gcloud secrets versions access latest --secret=stag-nest-api-global > apps/petty-cash-api/.env &&
+        printf '\n' >> apps/petty-cash-api/.env &&
         gcloud secrets versions access latest --secret=$_ENV_SECRET >> apps/petty-cash-api/.env &&
-        gcloud secrets versions access latest --secret=authjs-public-key > apps/petty-cash-api/secrets/jwtRS256.key.pub
+        gcloud secrets versions access latest --secret=authjs-public-key > apps/petty-cash-api/secrets/jwtRS256.key.pub &&
+        gcloud secrets versions access latest --secret=stag-bucket-key > apps/petty-cash-api/secrets/dev-bucket.json
     id: SetupEnv
   - name: gcr.io/cloud-builders/docker
     # Skip the independent local development stage when building runner.

@@ -1,3 +1,4 @@
+import { StorageService } from '../storage/storage.service';
 import { Readable } from 'node:stream';
 import { NotFoundException } from '@nestjs/common';
 import { GeminiReceiptService } from '../ocr/gemini-receipt.service';
@@ -149,7 +150,10 @@ test('timeout releases the receipt stream', async () => {
 
 test('only the owner can extract a completed file, even when another user can read an attached receipt', async () => {
   const findUnique = jest.fn();
-  const service = new FilesService({ receiptFile: { findUnique } } as unknown as PrismaService);
+  const service = new FilesService(
+    { receiptFile: { findUnique } } as unknown as PrismaService,
+    new StorageService(),
+  );
   for (const record of [
     null,
     { state: 'uploading', ownerId: actor.id },

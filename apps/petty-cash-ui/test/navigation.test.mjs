@@ -62,6 +62,29 @@ test('navigation loads only page data, reusing shared reads within their freshne
   assert.equal(store.error, '');
 });
 
+test('page readiness hides shared data on navigation and retains content during same-page refresh', async () => {
+  const pending = defer();
+  let delayFinance = false;
+  const { store } = setup({ handler: path => path === '/finance' && delayFinance ? pending.promise : undefined });
+  await store.initialize('/approvals');
+  assert.equal(store.isPageReady('/approvals'), true);
+  delayFinance = true;
+  const navigation = store.initialize('/finance');
+  await new Promise(r => setImmediate(r));
+  assert.equal(store.loading, true);
+  assert.equal(store.isPageReady('/approvals'), false);
+  assert.equal(store.isPageReady('/finance'), false);
+  pending.resolve(ok(page));
+  await navigation;
+  assert.equal(store.isPageReady('/finance'), true);
+  const refresh = store.initialize('/finance');
+  assert.equal(store.loading, true);
+  assert.equal(store.isPageReady('/finance'), true);
+  await refresh;
+  store.reset();
+  assert.equal(store.isPageReady('/finance'), false);
+});
+
 test('shared data expires; notifications refresh only once even with an overlapping poll', async () => {
   const { store, calls, advance } = setup();
   await store.initialize('/approvals');
@@ -79,6 +102,7 @@ test('unauthorized direct navigation loads no business APIs and finance has a va
   await store.initialize('/approvals');
   assert.equal(store.pageDenied, true);
   assert.equal(store.canViewPage('/approvals'), false);
+  assert.equal(store.isPageReady('/approvals'), false);
   assert.equal(store.canViewPage('/finance'), true);
   assert.equal(store.firstAllowedPage, '/finance');
   assert.deepEqual(calls.map(c => c.path), ['/access']);
@@ -96,6 +120,8 @@ test('late list responses from a previous page cannot replace the active page', 
   old.resolve(ok({ ...page, data: [{ id: 'stale' }] }));
   await first;
   assert.equal(store.requests.length, 0);
+  assert.equal(store.isPageReady('/finance'), true);
+  assert.equal(store.isPageReady('/approvals'), false);
   assert.equal(store.error, '');
 });
 
@@ -145,8 +171,10 @@ test('failed reads are not cached and can be retried', async () => {
     ? { success: false, status: 503, error: { message: 'Service unavailable' } } : undefined });
   await store.initialize('/approvals');
   assert.equal(store.error, 'Service unavailable');
+  assert.equal(store.isPageReady('/approvals'), false);
   await store.initialize('/approvals');
   assert.equal(store.error, '');
+  assert.equal(store.isPageReady('/approvals'), true);
 });
 
 test('request and approval controls require the relevant active assignment as well as API allowed actions', async () => {

@@ -40,11 +40,15 @@ The API accepts the shared storage variables used by contribution-api:
 ```dotenv
 FILE_STORAGE=gcs
 STORAGE_PROJECT_ID=mpao-1327
-STORAGE_KEY_FILE=secrets/stag-bucket.json
+STORAGE_KEY_FILE=./secrets/dev-bucket.json
 STORAGE_MEDIA_BUCKET=staging.mpao-1327.appspot.com
 ```
 
-The key path is relative to the API process working directory. For local Docker, place it at `apps/petty-cash-api/secrets/stag-bucket.json`; the existing source mount exposes it at `/workspace/apps/petty-cash-api/secrets/stag-bucket.json`. Service-account JSON is ignored by Git and excluded from image builds. Mount credentials at runtime for deployments, or omit `STORAGE_KEY_FILE` to use the runtime service account (Application Default Credentials). `GCS_RECEIPT_BUCKET` remains a compatibility fallback; `STORAGE_MEDIA_BUCKET` takes precedence.
+The key path is relative to the API process working directory. For local Docker, place it at `apps/petty-cash-api/secrets/dev-bucket.json`; the source mount exposes it under the API directory. Credentials remain ignored by Git. `GCS_RECEIPT_BUCKET` remains a compatibility fallback; `STORAGE_MEDIA_BUCKET` takes precedence.
+
+Staging follows Employment API as explicitly requested: storage variables come from `stag-nest-api-global`, and Cloud Build separately fetches `stag-bucket-key` into `apps/petty-cash-api/secrets/dev-bucket.json`. `Dockerfile.api` copies the secrets directory to `/home/node/secrets`, matching `STORAGE_KEY_FILE=./secrets/dev-bucket.json`. `Dockerfile.api.dockerignore` permits only this storage JSON file in the API build; the default ignore rules still exclude credential JSON from UI builds. This means the staging API image contains the storage credential, just as Employment API does. No runtime secret mount, symlink, or extra storage environment override is used. Rebuild and redeploy staging to apply this setup; live access has not been verified.
+
+`StorageModule` exports `StorageService` for streamed storage writes, reads and deletes. `FilesService` owns multipart validation, receipt metadata and authorization. New objects use `petty-cash/<server-generated UUID>` (the bucket folder is `petty-cash/`, without a leading slash). That complete key is saved in `receipt_files.storage_key`; downloads, OCR and cleanup use it verbatim. Existing root-level objects keep working without a data migration or move.
 
 The current local environment retains `FILE_STORAGE=local` because the storage key has not been installed. Before switching, copy existing receipt objects from the local volume into the configured bucket using their unchanged database `storageKey` values; switching adapters does not migrate files. The bucket must keep receipts private; retrieval remains through the guarded API. The Terraform bucket resource is for provisioning a new dedicated bucket and must not be applied to recreate this existing shared media bucket.
 

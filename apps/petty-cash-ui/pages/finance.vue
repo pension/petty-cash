@@ -10,7 +10,9 @@
       </div>
     </header>
 
-    <div class="space-y-5 pb-8">
+    <PageSkeleton v-if="!store.isPageReady('/finance')" :stats="4" />
+
+    <div v-else class="space-y-5 pb-8">
       <FloatStats />
 
       <PoTabs
@@ -89,6 +91,7 @@
 </template>
 
 <script setup lang="ts">
+import PageSkeleton from '~/components/float/PageSkeleton.vue';
 import { formatMoney } from '~/utils/floatFormat';
 
 import RequestPagination from '~/components/float/RequestPagination.vue';

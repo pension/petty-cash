@@ -10,7 +10,9 @@
       </div>
     </header>
 
-    <div class="space-y-5 pb-8">
+    <PageSkeleton v-if="!store.isPageReady('/requests')" />
+
+    <div v-else class="space-y-5 pb-8">
       <PoCard class="p-3 pl-4">
         <div class="flex flex-col lg:flex-row lg:items-center gap-3">
           <div class="grow">
@@ -85,6 +87,7 @@
 </template>
 
 <script setup lang="ts">
+import PageSkeleton from '~/components/float/PageSkeleton.vue';
 import { formatDate, formatMoney } from '~/utils/floatFormat';
 
 import { computed, ref, watch } from 'vue';

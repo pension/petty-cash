@@ -67,6 +67,7 @@ export const useFloatStore = defineStore('float', () => {
     transactionTotal = ref(0),
     countTotal = ref(0);
   const loading = ref(false),
+    loadedPage = ref(''),
     busy = ref(false),
     error = ref(''),
     accessError = ref(''),
@@ -96,6 +97,9 @@ export const useFloatStore = defineStore('float', () => {
   function canViewPage(path: string) {
     const capability = path.startsWith('/requests/') ? 'viewRequest' : pageCapabilities[path];
     return Boolean(capability && currentUser.value.capabilities[capability]);
+  }
+  function isPageReady(path: string) {
+    return loadedPage.value === path && canViewPage(path);
   }
   const firstAllowedPage = computed(() => Object.keys(pageCapabilities).find(canViewPage));
   function invalidateReads() {
@@ -168,6 +172,7 @@ export const useFloatStore = defineStore('float', () => {
     listQuery = {};
     pageDenied.value = false;
     loading.value = false;
+    loadedPage.value = '';
     listTotal.value = transactionTotal.value = countTotal.value = notificationTotal.value = 0;
     requests.value = [];
     staffAssignments.value = [];
@@ -331,6 +336,9 @@ export const useFloatStore = defineStore('float', () => {
     const run = ++navigationSequence;
     const context = generation;
     view = path;
+    // Shared list data belongs to one route. Never display it on a different page.
+    // Keep the current page mounted when refreshing that same route.
+    if (loadedPage.value !== path) loadedPage.value = '';
     requestSequence++;
     loading.value = true;
     pageDenied.value = false;
@@ -343,6 +351,7 @@ export const useFloatStore = defineStore('float', () => {
         return;
       }
       await loadPageData(path);
+      if (run === navigationSequence && context === generation) loadedPage.value = path;
     } catch (e) {
       if (run === navigationSequence && context === generation)
         error.value = e instanceof Error ? e.message : 'Could not load Petty Cash.';
@@ -608,6 +617,7 @@ export const useFloatStore = defineStore('float', () => {
     accessError,
     pageDenied,
     canViewPage,
+    isPageReady,
     firstAllowedPage,
     notifications,
     notificationTotal,

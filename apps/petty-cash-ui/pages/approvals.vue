@@ -10,7 +10,9 @@
       </div>
     </header>
 
-    <div class="space-y-5 pb-8">
+    <PageSkeleton v-if="!store.isPageReady('/approvals')" :stats="4" />
+
+    <div v-else class="space-y-5 pb-8">
       <FloatStats />
 
       <PoCard>
@@ -107,6 +109,7 @@
 </template>
 
 <script setup lang="ts">
+import PageSkeleton from '~/components/float/PageSkeleton.vue';
 import { formatDate, formatMoney } from '~/utils/floatFormat';
 
 import RequestPagination from '~/components/float/RequestPagination.vue';

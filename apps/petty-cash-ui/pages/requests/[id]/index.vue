@@ -1,5 +1,15 @@
 <template>
-  <PoContentArea v-if="request">
+  <PoContentArea v-if="!store.isPageReady(route.path)">
+    <header class="border-b border-slate-200 pb-5 mb-5">
+      <PoPageTitle
+        :stand-alone="true"
+        label="Request details"
+        description="Review request details, monitor the approval and disbursement timeline, and proceed with required actions."
+      />
+    </header>
+    <PageSkeleton :sections="2" :rows="3" />
+  </PoContentArea>
+  <PoContentArea v-else-if="request">
     <!-- Header with PoPageTitle (Matching standardsportal/[id]) -->
     <header class="lg:flex lg:items-end justify-between border-b border-slate-200 pb-5 mb-5">
       <div class="min-w-0 flex-1">
@@ -599,6 +609,7 @@
 </template>
 
 <script setup lang="ts">
+import PageSkeleton from '~/components/float/PageSkeleton.vue';
 import { cashDifference, cashSum, denominationTotal, emptyDenominationCounts  } from '~/utils/floatStatus';
 import { formatDate, formatMoney } from '~/utils/floatFormat';
 

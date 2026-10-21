@@ -53,3 +53,7 @@ Bulk OCR reuses `POST /ocr/receipts` and the existing `ocr.receipt` permission. 
 ## Staff settings
 
 StaffAssignmentsModule registers guarded `GET /staff-assignments`, `POST /staff-assignments/lookup`, `POST /staff-assignments` and `DELETE /staff-assignments/:id`. StaffDirectoryModule registers the common-grpc client with `ClientsModule.registerAsync` and injects it into StaffDirectoryService. Transport matches Employment API: TLS plus Google ID tokens only for `APP_ENV=production`, insecure otherwise; the unchanged `COMMON_GRPC_URL` is also the production token audience. Nest owns the client lifecycle. The shared `@pension/proto` contract supplies the RPC definition. Lookup and confirmation resolve active employees by work email; confirmation accepts type, email and the reviewed employeeId and re-fetches directory data outside the database transaction. Per-type row locks serialize changes and the unique active key protects duplicate assignments. AccessService reads only the verified actor's active assignment types; the CLI has no dependency on this HTTP feature or its gRPC client.
+
+## Storage
+
+StorageModule exports StorageService and is imported by FilesModule and the controller-free MaintenanceModule. FilesService handles multipart validation, ownership checks and receipt metadata; StorageService owns streamed object/local writes, reads and deletion. New storage keys start with `petty-cash/`; stored keys are never rewritten on read or cleanup, preserving existing receipts.

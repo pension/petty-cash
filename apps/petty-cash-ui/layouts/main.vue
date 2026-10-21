@@ -32,9 +32,9 @@
           label="Sign out"
           @button-click="logout"
       /></PoContentArea>
-      <PoContentArea v-else-if="store.loading"
-        ><PoTypography>Loading Petty Cash…</PoTypography></PoContentArea
-      >
+      <PoContentArea v-else-if="store.loading && !store.currentUser.id">
+        <PageSkeleton :stats="4" />
+      </PoContentArea>
       <PoContentArea v-else-if="store.error"
         ><PoMessage :message="store.error" /><PoButton
           label="Retry"
@@ -49,7 +49,7 @@
         />
       </PoContentArea>
       <!-- Keep NuxtPage mounted while gating the actual page component. -->
-      <slot :render-page="renderPage" />
+      <slot :render-page="renderPage" :page-loading="store.loading" />
       <PoFooter />
     </PoMain>
   </PoWrap>
@@ -66,8 +66,8 @@ import {
   PoContentArea,
   PoMessage,
   PoButton,
-  PoTypography,
 } from '@pension/ui-kit';
+import PageSkeleton from '~/components/float/PageSkeleton.vue';
 import allNavigation from '~/config/navigation';
 import { useFloatStore } from '~/stores/useFloatStore';
 const route = useRoute(),
@@ -79,7 +79,7 @@ const renderPage = computed(
     !!identity.user?.value?.transacting_as &&
     !!store.currentUser.id &&
     !store.accessError &&
-    !store.loading &&
+    store.canViewPage(route.path) &&
     !store.error &&
     !store.pageDenied,
 );

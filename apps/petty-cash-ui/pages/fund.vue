@@ -14,13 +14,15 @@
           v-if="store.currentUser.capabilities.topUp"
           label="Top-Up Fund"
           :icon="PlusIcon"
-          :disabled="store.busy"
+          :disabled="!store.isPageReady('/fund') || store.busy"
           @button-click="showTopUpModal = true"
         />
       </div>
     </header>
 
-    <div class="space-y-5 pb-16 sm:pb-0">
+    <PageSkeleton v-if="!store.isPageReady('/fund')" :stats="3" />
+
+    <div v-else class="space-y-5 pb-16 sm:pb-0">
       <!-- Stats Blocks -->
       <div class="hidden sm:block">
         <PoStatsBlock :items="statsItems" number-of-cols="grid-cols-1 sm:grid-cols-3 gap-4" />
@@ -132,6 +134,7 @@
 </template>
 
 <script setup lang="ts">
+import PageSkeleton from '~/components/float/PageSkeleton.vue';
 import { formatDate, formatMoney } from '~/utils/floatFormat';
 
 import { computed, reactive, ref } from 'vue';
@@ -167,7 +170,7 @@ const { showToast } = useToastify();
 
 const showTopUpModal = ref(false);
 const topUpForm = reactive({
-  amount: '5000',
+  amount: '',
   reference: '',
   notes: '',
 });

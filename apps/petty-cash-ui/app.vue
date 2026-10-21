@@ -3,7 +3,11 @@
     <Body class="bg-slate-100">
       <NuxtLayout v-slot="layout">
         <NuxtPage v-slot="{ Component }">
-          <component :is="Component" v-if="layout?.renderPage !== false" />
+          <component
+            :is="Component"
+            v-if="layout?.renderPage !== false"
+            :aria-busy="layout?.pageLoading || undefined"
+          />
         </NuxtPage>
       </NuxtLayout>
     </Body>

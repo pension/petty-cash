@@ -10,7 +10,9 @@
       </div>
     </header>
 
-    <div class="space-y-6 pb-8">
+    <PageSkeleton v-if="!store.isPageReady('/')" :stats="4" />
+
+    <div v-else class="space-y-6 pb-8">
       <FloatStats />
 
       <section class="space-y-3">
@@ -107,6 +109,7 @@
 </template>
 
 <script setup lang="ts">
+import PageSkeleton from '~/components/float/PageSkeleton.vue';
 import { formatDate, formatMoney } from '~/utils/floatFormat';
 
 import RequestPagination from '~/components/float/RequestPagination.vue';

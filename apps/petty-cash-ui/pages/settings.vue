@@ -10,7 +10,9 @@
       </div>
     </header>
 
-    <div class="space-y-6 pb-8">
+    <PageSkeleton v-if="!store.isPageReady('/settings')" :sections="2" :rows="3" />
+
+    <div v-else class="space-y-6 pb-8">
       <StaffAssignmentSection
         type="requester"
         title="Can create requests"
@@ -28,8 +30,12 @@
 </template>
 
 <script setup lang="ts">
+import PageSkeleton from '~/components/float/PageSkeleton.vue';
 import { PoContentArea, PoPageTitle } from '@pension/ui-kit';
+import { useFloatStore } from '~/stores/useFloatStore';
 import StaffAssignmentSection from '~/components/float/StaffAssignmentSection.vue';
+
+const store = useFloatStore();
 
 definePageMeta({
   layout: 'main',

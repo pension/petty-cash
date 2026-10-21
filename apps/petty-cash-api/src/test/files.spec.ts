@@ -1,6 +1,7 @@
+import { StorageService } from '../storage/storage.service';
 import { HttpException } from '@nestjs/common';
 import type { Request } from 'express';
-import { mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
 import { createServer, request as httpRequest, Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -96,7 +97,7 @@ describe('streaming receipt validation', () => {
 });
 // Real HTTP + local streamed storage, with a metadata-only stand-in for Prisma.
 describe('multipart upload lifecycle', () => {
-  let server: Server, port: number, directory: string, files: FilesService;
+  let server: Server, port: number, directory: string, files: FilesService, storage: StorageService;
   const rows = new Map<string, { id: string; state?: string; storageKey: string; size: number }>();
   const actor: Actor = {
     id: 'gs',
@@ -107,27 +108,32 @@ describe('multipart upload lifecycle', () => {
   };
   beforeAll(async () => {
     directory = await mkdtemp(join(tmpdir(), 'float-upload-test-'));
+    await mkdir(join(directory, 'petty-cash'));
     process.env.FILE_STORAGE = 'local';
     process.env.FILE_STORAGE_PATH = directory;
-    files = new FilesService({
-      receiptFile: {
-        create: ({ data }: { data: { id: string; storageKey: string; size: number } }) => {
-          rows.set(data.id, data);
-          return Promise.resolve(data);
+    storage = new StorageService();
+    files = new FilesService(
+      {
+        receiptFile: {
+          create: ({ data }: { data: { id: string; storageKey: string; size: number } }) => {
+            rows.set(data.id, data);
+            return Promise.resolve(data);
+          },
+          update: ({
+            where,
+            data,
+          }: {
+            where: { id: string };
+            data: { state?: string; size?: number };
+          }) => {
+            const row = { ...rows.get(where.id)!, ...data };
+            rows.set(where.id, row);
+            return Promise.resolve(row);
+          },
         },
-        update: ({
-          where,
-          data,
-        }: {
-          where: { id: string };
-          data: { state?: string; size?: number };
-        }) => {
-          const row = { ...rows.get(where.id)!, ...data };
-          rows.set(where.id, row);
-          return Promise.resolve(row);
-        },
-      },
-    } as unknown as PrismaService);
+      } as unknown as PrismaService,
+      storage,
+    );
     server = createServer((req, res) => {
       void files
         .upload(req as Request, actor)
@@ -186,8 +192,8 @@ describe('multipart upload lifecycle', () => {
     req.write(Buffer.concat([png, Buffer.alloc(4096)]));
     let written = false;
     for (let i = 0; i < 50; i++) {
-      const names = await readdir(directory);
-      if (names.length && (await stat(join(directory, names[0]))).size > 0) {
+      const names = await readdir(join(directory, 'petty-cash'));
+      if (names.length && (await stat(join(directory, 'petty-cash', names[0]))).size > 0) {
         written = true;
         break;
       }
@@ -201,17 +207,18 @@ describe('multipart upload lifecycle', () => {
     expect(response.body.size).toBe(4104);
     const row = rows.get(response.body.fileId)!;
     expect(row.state).toBe('ready');
+    expect(row.storageKey).toMatch(/^petty-cash\/[0-9a-f-]{36}$/);
     expect((await readFile(join(directory, row.storageKey))).subarray(0, 8)).toEqual(png);
   });
   test('truncated multipart is rejected and its partial object removed', async () => {
-    const before = (await readdir(directory)).length;
+    const before = (await readdir(join(directory, 'petty-cash'))).length;
     const { req, result } = start();
     req.end(Buffer.concat([png, Buffer.alloc(100)]));
     expect((await result).status).not.toBe(200);
-    expect((await readdir(directory)).length).toBe(before);
+    expect((await readdir(join(directory, 'petty-cash'))).length).toBe(before);
   });
   test('forged MIME and oversize multipart leave no partial object', async () => {
-    const before = (await readdir(directory)).length;
+    const before = (await readdir(join(directory, 'petty-cash'))).length;
     for (const [type, size, status] of [
       ['application/pdf', 100, 415],
       ['image/png', MAX_UPLOAD_BYTES, 413],
@@ -219,36 +226,35 @@ describe('multipart upload lifecycle', () => {
       const { req, result } = start(type);
       req.end(Buffer.concat([png, Buffer.alloc(size), Buffer.from('\r\n--float-test--\r\n')]));
       expect((await result).status).toBe(status);
-      expect((await readdir(directory)).length).toBe(before);
+      expect((await readdir(join(directory, 'petty-cash'))).length).toBe(before);
     }
   });
   test('disconnect removes partial storage without publishing the file', async () => {
-    const before = (await readdir(directory)).length;
+    const before = (await readdir(join(directory, 'petty-cash'))).length;
     const { req, result } = start();
     void result.catch(() => undefined);
     req.write(Buffer.concat([png, Buffer.alloc(10000)]));
     await pause(30);
     req.destroy();
     await pause(100);
-    expect((await readdir(directory)).length).toBe(before);
+    expect((await readdir(join(directory, 'petty-cash'))).length).toBe(before);
   });
   test('storage failure is propagated and never publishes ready metadata', async () => {
-    const storage = files as unknown as { writer: (key: string) => Promise<Writable> };
-    const original = storage.writer;
-    storage.writer = () =>
+    const writer = jest.spyOn(storage, 'createWriteStream').mockImplementation(() =>
       Promise.resolve(
         new Writable({
           write(_c, _e, done) {
             done(new Error('Storage unavailable'));
           },
         }),
-      );
+      ),
+    );
     try {
       const { req, result } = start();
       req.end(Buffer.concat([png, Buffer.alloc(100), Buffer.from('\r\n--float-test--\r\n')]));
       expect((await result).status).toBe(500);
     } finally {
-      storage.writer = original;
+      writer.mockRestore();
     }
   });
 });

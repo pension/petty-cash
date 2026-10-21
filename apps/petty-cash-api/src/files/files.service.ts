@@ -1,4 +1,3 @@
-import { Storage } from '@google-cloud/storage';
 import {
   BadRequestException,
   Injectable,
@@ -9,13 +8,11 @@ import {
 import busboy from 'busboy';
 import type { Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
-import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, rm } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
 import { Transform, TransformCallback, Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { Actor } from '../auth/actor';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export function detectType(b: Buffer): string | undefined {
   if (b.length >= 3 && b[0] === 255 && b[1] === 216 && b[2] === 255) return 'image/jpeg';
@@ -86,47 +83,13 @@ export class UploadValidator extends Transform {
 }
 @Injectable()
 export class FilesService {
-  private readonly local = process.env.FILE_STORAGE === 'local';
-  private readonly directory = resolve(process.env.FILE_STORAGE_PATH || 'var/receipts');
-  private readonly storage = new Storage({
-    projectId: process.env.STORAGE_PROJECT_ID?.trim() || undefined,
-    keyFilename: process.env.STORAGE_KEY_FILE?.trim()
-      ? resolve(process.env.STORAGE_KEY_FILE.trim())
-      : undefined,
-  });
-  constructor(private readonly db: PrismaService) {}
-  private bucket() {
-    return this.storage.bucket(
-      process.env.STORAGE_MEDIA_BUCKET?.trim() || process.env.GCS_RECEIPT_BUCKET!,
-    );
-  }
-  private async writer(key: string): Promise<Writable> {
-    if (this.local) {
-      await mkdir(this.directory, { recursive: true });
-      return createWriteStream(join(this.directory, key), {
-        flags: 'wx',
-        highWaterMark: 64 * 1024,
-      });
-    }
-    return this.bucket()
-      .file(key)
-      .createWriteStream({
-        resumable: false,
-        validation: 'crc32c',
-        metadata: {
-          contentType: 'application/octet-stream',
-          cacheControl: 'private, no-store',
-        },
-        preconditionOpts: { ifGenerationMatch: 0 },
-      });
-  }
-  private async remove(key: string) {
-    if (this.local) await rm(join(this.directory, key), { force: true });
-    else await this.bucket().file(key).delete({ ignoreNotFound: true });
-  }
+  constructor(
+    private readonly db: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
   async upload(req: Request, a: Actor) {
     const id = randomUUID(),
-      storageKey = randomUUID();
+      storageKey = this.storage.createKey();
     let fileSeen = false;
     let validator: UploadValidator | undefined;
     let write: Writable | undefined;
@@ -189,7 +152,7 @@ export class FilesService {
               size: 0,
             },
           });
-          write = await this.writer(storageKey);
+          write = await this.storage.createWriteStream(storageKey);
           await pipeline(stream, validator, write, { signal: abort.signal });
           if (stream.truncated) throw new PayloadTooLargeException('Upload was truncated.');
         })();
@@ -234,7 +197,7 @@ export class FilesService {
       };
     } catch (error) {
       write?.destroy();
-      await this.remove(storageKey).catch(() => undefined);
+      await this.storage.delete(storageKey).catch(() => undefined);
       // Leave an uploading row for maintenance if storage deletion failed; never expose it.
       throw error;
     } finally {
@@ -256,12 +219,7 @@ export class FilesService {
       'Content-Disposition',
       `inline; filename*=UTF-8''${encodeURIComponent(file.fileName)}`,
     );
-    await pipeline(
-      this.local
-        ? createReadStream(join(this.directory, file.storageKey))
-        : this.bucket().file(file.storageKey).createReadStream(),
-      res,
-    );
+    await pipeline(this.storage.createReadStream(file.storageKey), res);
   }
   async forExtraction(id: string, a: Actor) {
     const file = await this.db.receiptFile.findUnique({ where: { id } });
@@ -270,10 +228,7 @@ export class FilesService {
     return {
       contentType: file.contentType,
       size: file.size,
-      open: () =>
-        this.local
-          ? createReadStream(join(this.directory, file.storageKey))
-          : this.bucket().file(file.storageKey).createReadStream(),
+      open: () => this.storage.createReadStream(file.storageKey),
     };
   }
   async cleanup() {
@@ -299,7 +254,7 @@ export class FilesService {
         return true;
       });
       if (claimed) {
-        await this.remove(f.storageKey);
+        await this.storage.delete(f.storageKey);
         await this.db.receiptFile.delete({ where: { id: f.id } });
       }
     }

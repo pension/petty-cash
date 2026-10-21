@@ -1,3 +1,4 @@
+import { StorageService } from '../storage/storage.service';
 jest.mock('@pension/midgard/dist/env', () => ({ APP_ENV: 'production', APP_NAME: 'petty-cash' }));
 import { IdentityTestModule } from './identity-test.module';
 import type { ExecutionContext, INestApplication } from '@nestjs/common';
@@ -635,7 +636,7 @@ integration('Float MySQL financial workflow', () => {
     const directory = await mkdtemp(join(tmpdir(), 'float-cleanup-test-'));
     process.env.FILE_STORAGE = 'local';
     process.env.FILE_STORAGE_PATH = directory;
-    const files = new FilesService(db);
+    const files = new FilesService(db, new StorageService());
     try {
       const r = await issue(10);
       const makeFile = (ownerId: string) =>

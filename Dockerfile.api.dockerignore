@@ -1,0 +1,30 @@
+**/node_modules
+**/dist
+**/.nuxt
+**/.output
+.git
+.claude
+apps/petty-cash-ui/node_modules
+apps/petty-cash-ui/.nuxt
+apps/petty-cash-ui/.output
+
+# The repo's own root .npmrc has `_authToken=${GH_PAT}` — a template meant
+# for a real local shell env var, not a literal token. The Dockerfile's
+# `deps` stage already generates a working .npmrc from the ARG GH_PAT
+# build-arg (a real baked-in token, no runtime env var needed) — if this
+# one isn't ignored, `COPY . .` in later stages overwrites that working
+# file with the unresolved template, and any yarn command run after that
+# COPY fails trying to parse it: "Error: Failed to replace env in config:
+# ${GH_PAT}" (yarn's own config-env substitution, not Docker's ARG
+# substitution — GH_PAT isn't set as an actual env var inside the build).
+.npmrc
+
+**/var/receipts
+**/test
+**/*.spec.ts
+
+# Exclude credentials except the explicitly requested staging API credential below.
+**/secrets/*.json
+
+# Match Employment API staging: fetched from Secret Manager by SetupEnv.
+!apps/petty-cash-api/secrets/dev-bucket.json
