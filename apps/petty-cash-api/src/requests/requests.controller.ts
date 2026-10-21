@@ -15,6 +15,10 @@ export class RequestsController {
   list(@CurrentActor() a: Actor, @Query() q: ListQuery) {
     return this.service.list(q, a);
   }
+  @Get('history')
+  history(@CurrentActor() a: Actor, @Query() q: ListQuery) {
+    return this.service.history(q, a);
+  }
   @Get(':id')
   get(@CurrentActor() a: Actor, @Param('id') id: string) {
     return this.service.get(id, a);

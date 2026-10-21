@@ -5,7 +5,7 @@ import { MaintenanceModule } from '../maintenance/maintenance.module';
 import { FundBootstrapService } from '../fund/fund-bootstrap.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ActorPipe } from '../auth/actor.pipe';
-import { PERMISSIONS } from '../auth/permissions';
+import { PERMISSIONS, ROLE_PERMISSION_GROUPS } from '../auth/permissions';
 import { allowedActions, capabilities } from '../common/request-policy';
 
 const identity = {
@@ -30,7 +30,7 @@ test('capabilities and request actions follow individual permissions', () => {
   ]);
 });
 test('resolve permission does not implicitly grant top-up or other finance actions', () => {
-  expect(capabilities(pipe.transform(user(['petty-cash.vaultcounts.resolve'])))).toEqual({
+  expect(capabilities(pipe.transform(user(['petty-cash.vaultcounts.resolve'])))).toMatchObject({
     createRequest: false,
     topUp: false,
     recordCount: false,
@@ -117,4 +117,50 @@ test('adding receipts also permits removing them only while editable and owned',
   for (const status of ['pending_approval', 'pending_closure', 'closed']) {
     expect(allowedActions({ status, requesterId: 'owner' }, actor)).toEqual([]);
   }
+});
+
+test('request and finance role templates have separate pages and actions', () => {
+  const request = pipe.transform(
+    user(ROLE_PERMISSION_GROUPS.request.map((p) => `petty-cash.${p}`)),
+  );
+  const finance = pipe.transform(
+    user(ROLE_PERMISSION_GROUPS.finance.map((p) => `petty-cash.${p}`)),
+  );
+  expect(capabilities(request)).toMatchObject({
+    viewRequests: true,
+    viewApprovals: true,
+    viewHistory: true,
+    viewFinance: false,
+    viewReconciliation: false,
+    viewLedger: false,
+    viewSettings: false,
+    lookupStaff: false,
+    addStaff: false,
+    removeStaff: false,
+    createRequest: true,
+  });
+  expect(capabilities(finance)).toMatchObject({
+    viewRequests: false,
+    viewApprovals: false,
+    viewHistory: false,
+    viewFinance: true,
+    viewReconciliation: true,
+    viewLedger: true,
+    viewSettings: true,
+    lookupStaff: true,
+    addStaff: true,
+    removeStaff: true,
+    createRequest: false,
+    topUp: true,
+    recordCount: true,
+    resolveCount: true,
+  });
+  expect(allowedActions({ status: 'pending_approval', requesterId: 'owner' }, finance)).toEqual([]);
+  expect(allowedActions({ status: 'pending_closure', requesterId: 'owner' }, request)).toEqual([]);
+});
+test('action permissions alone do not reveal page navigation', () => {
+  const actor = pipe.transform(
+    user(['petty-cash.approvals.authorize', 'petty-cash.settlements.finalize']),
+  );
+  expect(capabilities(actor)).toMatchObject({ viewApprovals: false, viewFinance: false });
 });

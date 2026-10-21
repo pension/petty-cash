@@ -241,7 +241,7 @@ integration('Float MySQL financial workflow', () => {
       .get('/access')
       .set('Authorization', auth(gs))
       .expect(200);
-    expect(accessResponse.body).toEqual(access.get(gs));
+    expect(accessResponse.body).toEqual(await access.get(gs));
     expect(accessResponse.body).not.toHaveProperty('name');
     await request(server).get('/me').set('Authorization', auth(gs)).expect(404);
     await request(server).get('/api/float/requests').set('Authorization', auth(gs)).expect(404);
@@ -684,7 +684,7 @@ integration('Float MySQL financial workflow', () => {
     expect(history.data.every((r) => r.status === 'closed')).toBe(true);
     const stats = await statistics.stats();
     expect(stats.cashInVault).toBe((await fund.fund()).currentExpectedBalance);
-    expect(access.get(gs)).toEqual({
+    expect(await access.get(gs)).toMatchObject({
       roles: ['GS_REQUESTER'],
       capabilities: { createRequest: true, topUp: false, recordCount: false, resolveCount: false },
     });

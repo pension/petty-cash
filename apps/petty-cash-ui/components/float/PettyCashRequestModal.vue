@@ -91,6 +91,9 @@ const isChanged = computed(
 
 const canSubmit = computed(
   () =>
+    (props.request
+      ? props.request.allowedActions.includes('edit') && store.staffEligibility.requester
+      : store.currentUser.capabilities.createRequest) &&
     form.purpose.trim() !== '' &&
     Number(form.requestedAmount) > 0 &&
     !!form.neededBy &&

@@ -5,6 +5,11 @@ import { runInNewContext } from 'node:vm';
 import * as pinia from 'pinia';
 import * as vue from 'vue';
 import ts from 'typescript';
+const eligibilityModule = {};
+runInNewContext(ts.transpileModule(readFileSync(new URL('../utils/staffEligibility.ts', import.meta.url), 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText, { exports: eligibilityModule, Set });
+
 
 const source = readFileSync(new URL('../stores/useFloatStore.ts', import.meta.url), 'utf8');
 const code = ts.transpileModule(source, {
@@ -20,15 +25,18 @@ function setup(handler) {
     require: (name) => {
       if (name === 'pinia') return pinia;
       if (name === 'vue') return vue;
+      if (name === '~/utils/staffEligibility') return eligibilityModule;
       throw new Error(`Unexpected dependency: ${name}`);
     },
     URL,
     URLSearchParams,
     Error,
+    useIdentity: () => ({ user: { value: { uuid: 'owner', name: 'Test', email: 'test@example.test' } } }),
     useRuntimeConfig: () => ({ public: { apiBase: 'http://petty-api.pension.test' } }),
     useHttp: async (url, options) => {
       const path = new URL(url).pathname;
       calls.push({ path, ...options });
+      if (path === '/access') return ok({ roles: [], capabilities: { createRequest: true, uploadReceipts: true, extractReceipts: true }, staffEligibility: { requester: true, approver: true } });
       return handler(path, options);
     },
   });
@@ -122,8 +130,8 @@ test('bulk confirmation sends one batch and reuses the server key after a transi
 test('bulk extraction sends all file IDs in one request using the existing OCR endpoint', async () => {
   const { store, calls } = setup(() => ok({ receipts: [] }));
   await store.extractReceipts(['file-one', 'file-two']);
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].path, '/ocr/receipts');
-  assert.equal(calls[0].method, 'POST');
-  assert.deepEqual(calls[0].body.fileIds, ['file-one', 'file-two']);
+  const extraction = calls.filter(call => call.path === '/ocr/receipts');
+  assert.equal(extraction.length, 1);
+  assert.equal(extraction[0].method, 'POST');
+  assert.deepEqual(extraction[0].body.fileIds, ['file-one', 'file-two']);
 });

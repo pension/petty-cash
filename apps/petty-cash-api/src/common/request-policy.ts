@@ -1,6 +1,22 @@
 import { can, type Actor } from '../auth/actor';
 export function capabilities(a: Actor) {
   return {
+    uploadReceipts: can(a, 'files.upload'),
+    extractReceipts: can(a, 'ocr.receipt'),
+    viewSettings: can(a, 'staffassignments.list'),
+    lookupStaff: can(a, 'staffassignments.lookup'),
+    addStaff: can(a, 'staffassignments.add'),
+    removeStaff: can(a, 'staffassignments.remove'),
+    viewRequests: can(a, 'requests.list'),
+    viewRequest: can(a, 'requests.get'),
+    viewApprovals: can(a, 'approvals.list'),
+    viewFinance: can(a, 'disbursements.list'),
+    viewHistory: can(a, 'requests.history'),
+    viewReconciliation: can(a, 'vaultcounts.list'),
+    viewLedger: can(a, 'fund.transactions'),
+    viewFund: can(a, 'fund.get'),
+    viewStatistics: can(a, 'statistics.get'),
+    viewNotifications: can(a, 'notifications.list'),
     createRequest: can(a, 'requests.create'),
     topUp: can(a, 'fund.topup'),
     recordCount: can(a, 'vaultcounts.recordcount'),

@@ -104,6 +104,9 @@ export class RequestsService {
   get(id: string, a: Actor) {
     return this.records.get(id, a);
   }
+  history(q: ListQuery, a: Actor) {
+    return this.records.list({ ...q, status: 'closed', sort: 'closedAt' }, a);
+  }
   list(q: ListQuery, a: Actor) {
     return this.records.list(q, a);
   }

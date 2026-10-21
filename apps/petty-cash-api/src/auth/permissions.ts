@@ -1,13 +1,18 @@
 /** Lowercase controller/action keys; Midgard compares permissions case-insensitively. */
 export const PERMISSIONS = [
-  'access.get',
-  'idempotency.create',
+  'staffassignments.list',
+  'staffassignments.lookup',
+  'staffassignments.add',
+  'staffassignments.remove',
   'requests.list',
+  'requests.history',
   'requests.get',
   'requests.create',
   'requests.edit',
+  'approvals.list',
   'approvals.authorize',
   'approvals.reject',
+  'disbursements.list',
   'disbursements.notifycollection',
   'disbursements.confirmreceipt',
   'expenses.addexpense',
@@ -31,3 +36,49 @@ export const PERMISSIONS = [
   'ocr.receipt',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
+
+/** Bifrost provisioning templates, never role-name authorization checks. */
+const shared: Permission[] = [
+  'requests.get',
+  'files.download',
+  'notifications.list',
+  'notifications.markread',
+  'statistics.get',
+];
+export const ROLE_PERMISSION_GROUPS: Record<'request' | 'finance', Permission[]> = {
+  request: [
+    ...shared,
+    'requests.list',
+    'requests.history',
+    'requests.create',
+    'requests.edit',
+    'approvals.list',
+    'approvals.authorize',
+    'approvals.reject',
+    'disbursements.confirmreceipt',
+    'expenses.addexpense',
+    'expenses.removeexpense',
+    'settlements.settle',
+    'files.upload',
+    'ocr.receipt',
+  ],
+  finance: [
+    ...shared,
+    'staffassignments.list',
+    'staffassignments.lookup',
+    'staffassignments.add',
+    'staffassignments.remove',
+    'disbursements.list',
+    'disbursements.notifycollection',
+    'settlements.returnforcorrection',
+    'settlements.finalize',
+    'fund.get',
+    'fund.transactions',
+    'fund.topup',
+    'vaultcounts.list',
+    'vaultcounts.recordcount',
+    'vaultcounts.resolve',
+    'notifications.sendreminder',
+    'reports.reconciliation',
+  ],
+};

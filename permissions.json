@@ -2,18 +2,6 @@
   "app": "petty-cash",
   "permissions": [
     {
-      "subject": "idempotency",
-      "action": "create",
-      "description": "Obtain a server-generated retry key for financial operations",
-      "organisation": "Maldives Pension Administration Office"
-    },
-    {
-      "subject": "access",
-      "action": "get",
-      "description": "View application access and capabilities",
-      "organisation": "Maldives Pension Administration Office"
-    },
-    {
       "subject": "requests",
       "action": "list",
       "description": "List petty cash requests",
@@ -173,6 +161,48 @@
       "subject": "ocr",
       "action": "receipt",
       "description": "Extract editable receipt details with Google AI",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "requests",
+      "action": "history",
+      "description": "View closed request history",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "approvals",
+      "action": "list",
+      "description": "View GS Approvals",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "disbursements",
+      "action": "list",
+      "description": "View Finance Desk",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "staffassignments",
+      "action": "list",
+      "description": "View Petty Cash staff assignments",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "staffassignments",
+      "action": "lookup",
+      "description": "Look up an employee by work email",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "staffassignments",
+      "action": "add",
+      "description": "Add a Petty Cash staff assignment",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "staffassignments",
+      "action": "remove",
+      "description": "Remove a Petty Cash staff assignment",
       "organisation": "Maldives Pension Administration Office"
     }
   ]

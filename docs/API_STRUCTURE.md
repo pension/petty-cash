@@ -6,9 +6,9 @@ The API follows the original project's Nest feature-folder pattern. Each folder 
 | --- | --- | --- |
 | idempotency | `POST /idempotency-keys` | Server-generated UUID retry keys; no cash movement |
 | access | `GET /access` | Application roles and capabilities only |
-| requests | `GET/POST /requests`, `GET/PATCH /requests/:id` | Requests and details |
-| approvals | `POST /requests/:id/authorize`, `/reject` | GS Manager decisions |
-| disbursements | `POST /requests/:id/notify-collection`, `/confirm-receipt` | Preparation and acknowledged collection |
+| requests | `GET/POST /requests`, `GET /requests/history`, `GET/PATCH /requests/:id` | Requests and details |
+| approvals | `GET /approvals`, `POST /requests/:id/authorize`, `/reject` | GS Manager decisions |
+| disbursements | `GET /finance`, `POST /requests/:id/notify-collection`, `/confirm-receipt` | Preparation and acknowledged collection |
 | expenses | `POST /requests/:id/expenses`, `DELETE /requests/:id/expenses/:expenseId` | Expense evidence |
 | settlements | `POST /requests/:id/settle`, `/return-for-correction`, `/finalize` | Settlement and atomic closure |
 | fund | `GET /fund`, `GET /fund/transactions`, `POST /fund/top-ups` | Vault fund and ledger queries |
@@ -23,7 +23,7 @@ The API follows the original project's Nest feature-folder pattern. Each folder 
 
 Bifrost `/me` owns identity. The UI reads the existing Midgard identity state; the API does not duplicate identity or maintain users. `/access` returns no user profile.
 
-Every controller uses `IdentityGuard`, `EntityGuard` and `PermissionGuard`. The latter follows verification-api's pattern: Bifrost's active numeric `transacting_as` must match `MPAO_ENTITY_ID`. Every handler then resolves `@CurrentActor()`, through ActorPipe using Midgard controller/action permissions. The standard development permission bypass applies to route access, capabilities and allowedActions. Request ownership and state checks remain enforced. See PERMISSIONS.md.
+Business controllers use `IdentityGuard`, `EntityGuard` and `PermissionGuard`. `GET /access` and `POST /idempotency-keys` are explicit exceptions: use only `IdentityGuard` and `EntityGuard`, with no separate action permissions. Access reports the caller’s capabilities (all false when none are granted); retry keys grant no business authority. EntityGuard follows verification-api's pattern: Bifrost's active numeric `transacting_as` must match `MPAO_ENTITY_ID`. Every handler then resolves `@CurrentActor()`, through ActorPipe using Midgard controller/action permissions. The standard development permission bypass applies to route access, capabilities and allowedActions. Request ownership and state checks remain enforced. See PERMISSIONS.md.
 
 ## Dependencies and transaction ownership
 
@@ -49,3 +49,7 @@ Zod input schemas and inferred DTOs are stored in each feature's `dto/` folder. 
 `POST /requests/:id/expenses` accepts either the existing single receipt or `{ receipts: [<receipt with fileId>], expectedVersion }`. Batches require 1–20 unique file IDs and Idempotency-Key. ExpensesService validates and locks the files in stable order, then inserts every expense in the shared request transaction. RequestWorkflowService applies idempotent replay to this batch operation. ExpensesPermissionGuard preserves Midgard checks and additionally allows addexpense permission to remove receipts, subject to the same ownership/state policy.
 
 Bulk OCR reuses `POST /ocr/receipts` and the existing `ocr.receipt` permission. `{fileIds}` validates 1–20 unique owned ready files, then GeminiReceiptService performs one shared-prompt generation with all attachments. `{fileId}` still returns the original single-receipt payload. Bulk results carry server-mapped file IDs.
+
+## Staff settings
+
+StaffAssignmentsModule registers guarded `GET /staff-assignments`, `POST /staff-assignments/lookup`, `POST /staff-assignments` and `DELETE /staff-assignments/:id`. StaffDirectoryService lazily creates a common-grpc client using `COMMON_GRPC_URL` and the shared `@pension/proto` contract. Lookup and confirmation resolve active employees by work email; confirmation accepts type, email and the reviewed employeeId and re-fetches directory data outside the database transaction. Per-type row locks serialize changes and the unique active key protects duplicate assignments. AccessService reads only the verified actor's active assignment types; the CLI has no dependency on this HTTP feature or its gRPC client.

@@ -228,3 +228,36 @@ model NotificationRead {
   @@id([notificationId, userId])
   @@map("notification_reads")
 }
+
+// Permanent per-type rows serialize assignment changes, including the first add.
+model StaffAssignmentType {
+  type        String            @id @map("type") @db.VarChar(20)
+  assignments StaffAssignment[]
+
+  @@map("staff_assignment_types")
+}
+
+model StaffAssignment {
+  id               String              @id @map("id") @db.VarChar(40)
+  type             String              @map("type") @db.VarChar(20)
+  assignmentType   StaffAssignmentType @relation(fields: [type], references: [type], onDelete: Restrict, onUpdate: Restrict, map: "staff_assignments_type_fk")
+  employeeId       Int                 @map("employee_id") @db.UnsignedInt
+  activeEmployeeId Int?                @map("active_employee_id") @db.UnsignedInt
+  rcn              String?             @map("rcn") @db.VarChar(100)
+  identifier       String?             @map("identifier") @db.VarChar(100)
+  name             String              @map("name")
+  email            String              @map("email") @db.VarChar(254)
+  designation      String              @map("designation")
+  department       String              @map("department")
+  addedAt          DateTime            @default(now()) @map("added_at")
+  addedBy          String              @map("added_by") @db.VarChar(100)
+  addedByName      String              @map("added_by_name")
+  removedAt        DateTime?           @map("removed_at")
+  removedBy        String?             @map("removed_by") @db.VarChar(100)
+  removedByName    String?             @map("removed_by_name")
+
+  @@unique([type, activeEmployeeId])
+  @@index([employeeId, removedAt])
+  @@index([type, removedAt, addedAt])
+  @@map("staff_assignments")
+}

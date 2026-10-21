@@ -67,3 +67,7 @@ Each feature has its own Nest module, controller, service and input DTOs; see [A
 For existing configuration, replace `MPAO_ORGANISATION_UUID` with the verified numeric `MPAO_ENTITY_ID`, and set `NUXT_PUBLIC_API_BASE` to the API origin (for example `http://localhost:4000`) without `/api/float`. No database migration is required for this structural refactor. The old prefixed routes and local `/me` endpoint are intentionally unavailable.
 
 Permission setup and bulk SQL: [PERMISSIONS.md](docs/PERMISSIONS.md). Use `APP_NAME=petty-cash`; development skips permissions through Midgard while retaining authentication, MPAO and workflow checks.
+
+## Staff Settings
+
+Settings manages requester and approver staff assignments using an email lookup through common-grpc. Frontend request/approval actions require active staff assignments in addition to existing permissions; backend business authorization is unchanged. See [staff settings and rollout](docs/STAFF_SETTINGS.md) for the shared proto release, gRPC configuration, additive database migration, Bifrost permissions and first-time setup. No real staff are seeded.

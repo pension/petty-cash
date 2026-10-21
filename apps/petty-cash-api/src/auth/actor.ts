@@ -5,6 +5,7 @@ export const ROLES = ['GS_REQUESTER', 'GS_MANAGER', 'FINANCE_STAFF', 'FINANCE_SU
 export type Role = (typeof ROLES)[number];
 export type Actor = {
   id: string;
+  entityId?: number;
   name: string;
   email: string;
   avatar?: string;
@@ -37,6 +38,7 @@ export function actorFrom(user: AuthUser, permissions: Permission[]): Actor {
   };
   return {
     id: user.uuid,
+    entityId: user.entity_id,
     name: user.name,
     email: user.email,
     avatar: user.avatar,

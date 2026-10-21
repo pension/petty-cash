@@ -40,7 +40,12 @@
     "zod": "^3.24.1",
     "busboy": "^1.6.0",
     "@google-cloud/storage": "^7.16.0",
-    "@petty-cash/denominations": "0.0.1"
+    "@petty-cash/denominations": "0.0.1",
+    "@nestjs/microservices": "^10.0.0",
+    "@grpc/grpc-js": "^1.12.5",
+    "@grpc/proto-loader": "^0.7.13",
+    "@pension/proto": "0.1.8",
+    "google-auth-library": "^9.15.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

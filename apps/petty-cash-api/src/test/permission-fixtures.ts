@@ -1,7 +1,6 @@
 import type { Permission } from '../auth/permissions';
 import type { Role } from '../auth/actor';
 const read: Permission[] = [
-  'access.get',
   'requests.list',
   'requests.get',
   'fund.get',

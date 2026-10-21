@@ -1,3 +1,4 @@
+import { StaffAssignmentsModule } from './staff-assignments/staff-assignments.module';
 import { AccessModule } from './access/access.module';
 import { ApprovalsModule } from './approvals/approvals.module';
 import { DisbursementsModule } from './disbursements/disbursements.module';
@@ -14,6 +15,7 @@ import { StatisticsModule } from './statistics/statistics.module';
 import { VaultCountsModule } from './vault-counts/vault-counts.module';
 export const BUSINESS_MODULES = [
   AccessModule,
+  StaffAssignmentsModule,
   IdempotencyModule,
   RequestsModule,
   ApprovalsModule,

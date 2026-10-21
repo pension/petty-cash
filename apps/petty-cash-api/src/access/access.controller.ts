@@ -1,11 +1,11 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
-import { IdentityGuard, PermissionGuard } from '@pension/midgard';
+import { IdentityGuard } from '@pension/midgard';
 import type { Actor } from '../auth/actor';
 import { CurrentActor } from '../auth/current-actor.decorator';
 import { EntityGuard } from '../auth/entity.guard';
 import { AccessService } from './access.service';
 @Controller('access')
-@UseGuards(IdentityGuard, EntityGuard, PermissionGuard)
+@UseGuards(IdentityGuard, EntityGuard)
 export class AccessController {
   constructor(private readonly service: AccessService) {}
   @Get('')

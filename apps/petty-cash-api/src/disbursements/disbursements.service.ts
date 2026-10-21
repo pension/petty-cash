@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import type { ListQuery } from '../common/pagination';
+import { RequestRecordsService } from '../common/request-records.service';
 import type { Actor } from '../auth/actor';
 import { RequestWorkflowService } from '../common/request-workflow.service';
 import { parse } from '../common/validation';
@@ -11,7 +13,22 @@ export class DisbursementsService {
   constructor(
     private readonly workflow: RequestWorkflowService,
     private readonly ledger: LedgerService,
+    private readonly records: RequestRecordsService,
   ) {}
+  list(q: ListQuery, a: Actor) {
+    const statuses = [
+      'pending_approval',
+      'pending_finance',
+      'ready_for_collection',
+      'cash_issued',
+      'returned_for_correction',
+      'pending_closure',
+    ];
+    const selected = q.status?.split(',') ?? ['pending_finance', 'ready_for_collection'];
+    if (!selected.length || selected.some((status) => !statuses.includes(status)))
+      throw new BadRequestException('Invalid Finance Desk status.');
+    return this.records.list({ ...q, status: selected.join(',') }, a);
+  }
   async notifyCollection(id: string, body: unknown, a: Actor) {
     const d = parse(NotifyCollectionSchema, body);
     return this.workflow.run(id, 'notifyCollection', d, a, (_tx, r) => {

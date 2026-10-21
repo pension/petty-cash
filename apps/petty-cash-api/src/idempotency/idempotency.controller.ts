@@ -1,10 +1,10 @@
 import { Controller, Header, Post, UseGuards } from '@nestjs/common';
-import { IdentityGuard, PermissionGuard } from '@pension/midgard';
+import { IdentityGuard } from '@pension/midgard';
 import { EntityGuard } from '../auth/entity.guard';
 import { IdempotencyService } from './idempotency.service';
 
 @Controller('idempotency-keys')
-@UseGuards(IdentityGuard, EntityGuard, PermissionGuard)
+@UseGuards(IdentityGuard, EntityGuard)
 export class IdempotencyController {
   constructor(private readonly service: IdempotencyService) {}
 

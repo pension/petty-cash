@@ -1,3 +1,10 @@
+import type {
+  StaffAssignment,
+  StaffAssignmentType,
+  StaffEmployee,
+  StaffEligibility,
+} from '~/types/staffAssignments';
+import { eligibleActions } from '~/utils/staffEligibility';
 import type { BulkReceiptInput } from '~/composables/useBulkReceipts';
 import type { ReceiptExtraction, BulkReceiptExtraction } from '~/utils/receiptExtraction';
 import { defineStore } from 'pinia';
@@ -29,6 +36,8 @@ export const useFloatStore = defineStore('float', () => {
     roles: [],
     capabilities: {},
   });
+  const staffAssignments = ref<StaffAssignment[]>([]);
+  const staffEligibility = ref<StaffEligibility>({ requester: false, approver: false });
   const requests = ref<PettyCashSummary[]>([]),
     details = ref<Record<string, PettyCashRequest>>({});
   const fund = ref<PettyCashFund>({
@@ -61,12 +70,57 @@ export const useFloatStore = defineStore('float', () => {
     busy = ref(false),
     error = ref(''),
     accessError = ref(''),
+    pageDenied = ref(false),
     notifications = ref<FloatNotification[]>([]),
     notificationTotal = ref(0);
   let listQuery: Record<string, string | number | boolean | undefined> = {},
     view = '',
     generation = 0,
-    requestSequence = 0;
+    requestSequence = 0,
+    navigationSequence = 0,
+    readEpoch = 0,
+    listEndpoint = '/requests';
+  const pendingReads = new Map<string, Promise<unknown>>();
+  const cachedReads = new Map<string, { value: unknown; expires: number }>();
+  let initialization: { path: string; promise: Promise<void> } | undefined;
+  const pageCapabilities: Record<string, string> = {
+    '/': 'viewRequests',
+    '/approvals': 'viewApprovals',
+    '/finance': 'viewFinance',
+    '/requests': 'viewHistory',
+    '/reconciliation': 'viewReconciliation',
+    '/fund': 'viewLedger',
+    '/notifications': 'viewNotifications',
+    '/settings': 'viewSettings',
+  };
+  function canViewPage(path: string) {
+    const capability = path.startsWith('/requests/') ? 'viewRequest' : pageCapabilities[path];
+    return Boolean(capability && currentUser.value.capabilities[capability]);
+  }
+  const firstAllowedPage = computed(() => Object.keys(pageCapabilities).find(canViewPage));
+  function invalidateReads() {
+    readEpoch++;
+    pendingReads.clear();
+    cachedReads.clear();
+  }
+  async function read<T>(path: string, ttl = 0): Promise<T> {
+    const cached = cachedReads.get(path);
+    if (ttl && cached && cached.expires > Date.now()) return cached.value as T;
+    const existing = pendingReads.get(path);
+    if (existing) return existing as Promise<T>;
+    const epoch = readEpoch;
+    const promise = api<T>(path).then((value) => {
+      if (epoch !== readEpoch) throw new Error('Petty Cash data changed.');
+      if (ttl) cachedReads.set(path, { value, expires: Date.now() + ttl });
+      return value;
+    });
+    pendingReads.set(path, promise);
+    try {
+      return await promise;
+    } finally {
+      if (pendingReads.get(path) === promise) pendingReads.delete(path);
+    }
+  }
   const keys = new Map<string, string>();
   const blobs = new Map<string, string>();
   const base = () => String(useRuntimeConfig().public.apiBase).replace(/\/$/, '');
@@ -105,8 +159,19 @@ export const useFloatStore = defineStore('float', () => {
   }
   function reset() {
     generation++;
+    navigationSequence++;
     requestSequence++;
+    invalidateReads();
+    initialization = undefined;
+    view = '';
+    listEndpoint = '/requests';
+    listQuery = {};
+    pageDenied.value = false;
+    loading.value = false;
+    listTotal.value = transactionTotal.value = countTotal.value = notificationTotal.value = 0;
     requests.value = [];
+    staffAssignments.value = [];
+    staffEligibility.value = { requester: false, approver: false };
     details.value = {};
     transactions.value = [];
     reconciliations.value = [];
@@ -144,18 +209,81 @@ export const useFloatStore = defineStore('float', () => {
     error.value = '';
     accessError.value = '';
   }
-  async function fetchStats() {
-    stats.value = await api<typeof stats.value>('/stats');
+  type Access = Pick<Me, 'roles' | 'capabilities'> & { staffEligibility: StaffEligibility };
+  async function refreshAccess(force = false) {
+    const context = generation;
+    const user = useIdentity().user.value;
+    if (!user?.uuid) throw new Error('Sign in through Bifrost to continue.');
+    try {
+      if (force) cachedReads.delete('/access');
+      const access = await read<Access>('/access', 30000);
+      staffEligibility.value = access.staffEligibility || { requester: false, approver: false };
+      currentUser.value = {
+        id: user.uuid,
+        name: user.name,
+        email: user.email,
+        department: access.roles.some((role) => role === 'GS_REQUESTER' || role === 'GS_MANAGER')
+          ? 'General Services'
+          : 'Finance',
+        roles: access.roles,
+        capabilities: {
+          ...access.capabilities,
+          createRequest: !!access.capabilities.createRequest && staffEligibility.value.requester,
+        },
+      };
+    } catch (error) {
+      if (context === generation) {
+        staffEligibility.value = { requester: false, approver: false };
+        currentUser.value.capabilities.createRequest = false;
+      }
+      throw error;
+    }
   }
-  async function fetchFund() {
-    fund.value = await api<PettyCashFund>('/fund');
+  function visibleRequest<T extends PettyCashSummary>(request: T): T {
+    return {
+      ...request,
+      allowedActions: eligibleActions(request.allowedActions, staffEligibility.value),
+    };
+  }
+  const visibleRequests = computed(() => requests.value.map(visibleRequest));
+  async function fetchStaffAssignments() {
+    staffAssignments.value = await read<StaffAssignment[]>('/staff-assignments');
+  }
+  const lookupStaff = (email: string) =>
+    api<StaffEmployee>('/staff-assignments/lookup', 'POST', { email });
+  async function saveStaffAssignment(operation: () => Promise<unknown>) {
+    await mutate('staff-settings', operation);
+    await refreshAccess(true).catch(() => {
+      error.value = 'Staff settings saved. Refresh the page to reload your access.';
+    });
+  }
+  const addStaffAssignment = (type: StaffAssignmentType, employee: StaffEmployee) =>
+    saveStaffAssignment(() =>
+      api('/staff-assignments', 'POST', {
+        type,
+        email: employee.email,
+        employeeId: employee.employeeId,
+      }),
+    );
+  const removeStaffAssignment = (id: string) =>
+    saveStaffAssignment(() => api(`/staff-assignments/${encodeURIComponent(id)}`, 'DELETE'));
+
+  async function fetchStats(ttl = 0) {
+    stats.value = await read<typeof stats.value>('/stats', ttl);
+  }
+  async function fetchFund(ttl = 0) {
+    fund.value = await read<PettyCashFund>('/fund', ttl);
   }
   async function fetchRequest(id: string) {
-    const r = await api<PettyCashRequest>(`/requests/${encodeURIComponent(id)}`);
+    const r = await read<PettyCashRequest>(`/requests/${encodeURIComponent(id)}`);
     details.value[id] = r;
-    return r;
+    return visibleRequest(r);
   }
-  async function fetchRequests(query: Record<string, string | number | boolean | undefined> = {}) {
+  async function fetchRequests(
+    query: Record<string, string | number | boolean | undefined> = {},
+    endpoint = listEndpoint,
+  ) {
+    listEndpoint = endpoint;
     listQuery = { ...query };
     const sequence = ++requestSequence;
     const q = new URLSearchParams(
@@ -163,7 +291,7 @@ export const useFloatStore = defineStore('float', () => {
         .filter(([, v]) => v !== undefined && v !== '')
         .map(([k, v]) => [k, String(v)]),
     );
-    const page = await api<Page<PettyCashSummary>>(`/requests?${q}`);
+    const page = await read<Page<PettyCashSummary>>(`${endpoint}?${q}`);
     if (sequence !== requestSequence) return;
     requests.value = page.data;
     listTotal.value = page.total;
@@ -171,67 +299,102 @@ export const useFloatStore = defineStore('float', () => {
     listPageSize.value = page.pageSize;
   }
   async function fetchTransactions(page = 1) {
-    const r = await api<Page<FundTransaction>>(`/fund/transactions?page=${page}&pageSize=5`);
+    const r = await read<Page<FundTransaction>>(`/fund/transactions?page=${page}&pageSize=5`);
     transactions.value = r.data;
     transactionTotal.value = r.total;
   }
   async function fetchCounts(page = 1) {
-    const r = await api<Page<DailyReconciliation>>(`/vault-counts?page=${page}&pageSize=10`);
+    const r = await read<Page<DailyReconciliation>>(`/vault-counts?page=${page}&pageSize=10`);
     reconciliations.value = r.data;
     countTotal.value = r.total;
   }
-  async function fetchNotifications(page = 1) {
-    const r = await api<Page<FloatNotification>>(`/notifications?page=${page}&pageSize=20`);
+  async function fetchNotifications(page = 1, ttl = 0) {
+    const r = await read<Page<FloatNotification>>(`/notifications?page=${page}&pageSize=20`, ttl);
     notifications.value = r.data;
     notificationTotal.value = r.total;
   }
   async function markRead(id: string) {
     await api(`/notifications/${id}/read`, 'POST');
-    await fetchNotifications();
+    invalidateReads();
+    await fetchNotifications(1, 60000);
   }
-  async function initialize(path: string) {
-    const run = ++generation;
+  function initialize(path: string): Promise<void> {
+    if (initialization?.path === path) return initialization.promise;
+    const promise = loadPage(path);
+    initialization = { path, promise };
+    void promise.finally(() => {
+      if (initialization?.promise === promise) initialization = undefined;
+    });
+    return promise;
+  }
+  async function loadPage(path: string) {
+    const run = ++navigationSequence;
+    const context = generation;
     view = path;
+    requestSequence++;
     loading.value = true;
+    pageDenied.value = false;
     error.value = '';
     try {
-      if (!currentUser.value.id) {
-        const user = useIdentity().user.value;
-        if (!user?.uuid) throw new Error('Sign in through Bifrost to continue.');
-        const access = await api<Pick<Me, 'roles' | 'capabilities'>>('/access');
-        if (run !== generation) return;
-        currentUser.value = {
-          id: user.uuid,
-          name: user.name,
-          email: user.email,
-          department: access.roles.some((role) => role === 'GS_REQUESTER' || role === 'GS_MANAGER')
-            ? 'General Services'
-            : 'Finance',
-          ...access,
-        };
+      await refreshAccess();
+      if (run !== navigationSequence || context !== generation) return;
+      if (!canViewPage(path)) {
+        pageDenied.value = true;
+        return;
       }
-      if (run !== generation) return;
-      await Promise.all([fetchFund(), fetchStats(), fetchNotifications()]);
-      if (path.startsWith('/requests/')) await fetchRequest(path.split('/')[2]);
-      else if (path === '/fund') await fetchTransactions();
-      else if (path === '/reconciliation') await fetchCounts();
-      else if (path === '/approvals') await fetchRequests({ status: 'pending_approval' });
-      else if (path === '/finance')
-        await fetchRequests({ status: 'pending_finance,ready_for_collection' });
-      else if (path === '/requests')
-        await fetchRequests({ status: 'closed', sort: 'closedAt', order: 'desc' });
-      else if (path === '/')
-        await fetchRequests({
-          mine: true,
-          status:
-            'pending_approval,pending_finance,ready_for_collection,cash_issued,returned_for_correction,pending_closure',
-        });
+      await loadPageData(path);
     } catch (e) {
-      if (run === generation)
+      if (run === navigationSequence && context === generation)
         error.value = e instanceof Error ? e.message : 'Could not load Petty Cash.';
     } finally {
-      if (run === generation) loading.value = false;
+      if (run === navigationSequence && context === generation) loading.value = false;
     }
+  }
+  async function loadPageData(path: string, refresh = false) {
+    const caps = currentUser.value.capabilities;
+    const jobs: Promise<unknown>[] = [];
+    if (caps.viewNotifications) jobs.push(fetchNotifications(1, 60000));
+    if (
+      caps.viewStatistics &&
+      ['/', '/approvals', '/finance', '/fund', '/reconciliation'].includes(path)
+    )
+      jobs.push(fetchStats(30000));
+    if (caps.viewFund && ['/fund', '/reconciliation'].includes(path)) jobs.push(fetchFund(30000));
+    if (path.startsWith('/requests/')) {
+      if (!refresh) jobs.push(fetchRequest(path.split('/')[2]));
+    } else if (path === '/fund') jobs.push(fetchTransactions());
+    else if (path === '/reconciliation') jobs.push(fetchCounts());
+    else if (path === '/settings') jobs.push(fetchStaffAssignments());
+    else if (path === '/approvals')
+      jobs.push(fetchRequests(refresh ? listQuery : {}, '/approvals'));
+    else if (path === '/finance')
+      jobs.push(
+        fetchRequests(
+          refresh ? listQuery : { status: 'pending_finance,ready_for_collection' },
+          '/finance',
+        ),
+      );
+    else if (path === '/requests')
+      jobs.push(
+        fetchRequests(
+          refresh ? listQuery : { sort: 'closedAt', order: 'desc' },
+          '/requests/history',
+        ),
+      );
+    else if (path === '/')
+      jobs.push(
+        fetchRequests(
+          refresh
+            ? listQuery
+            : {
+                mine: true,
+                status:
+                  'pending_approval,pending_finance,ready_for_collection,cash_issued,returned_for_correction,pending_closure',
+              },
+          '/requests',
+        ),
+      );
+    await Promise.all(jobs);
   }
   async function mutate<T>(
     scope: string,
@@ -253,18 +416,8 @@ export const useFloatStore = defineStore('float', () => {
       const result = await fn(key);
       keys.delete(scope);
       // A refresh failure must never turn a committed payment into a failed submission.
-      await Promise.all([
-        fetchFund(),
-        fetchStats(),
-        fetchNotifications(),
-        ...(view === '/fund'
-          ? [fetchTransactions()]
-          : view === '/reconciliation'
-            ? [fetchCounts()]
-            : !view.startsWith('/requests/')
-              ? [fetchRequests(listQuery)]
-              : []),
-      ]).catch(() => {
+      invalidateReads();
+      await loadPageData(view, true).catch(() => {
         error.value = 'Saved successfully. Refresh the page to update the totals.';
       });
       return result;
@@ -284,7 +437,26 @@ export const useFloatStore = defineStore('float', () => {
     method = 'POST',
     idempotent = false,
   ) {
+    await refreshAccess(true);
     const known = details.value[id] || requests.value.find((r) => r.id === id);
+    const actionName = name.startsWith('expenses/')
+      ? 'removeExpense'
+      : (
+          {
+            '': 'edit',
+            authorize: 'authorize',
+            reject: 'reject',
+            'notify-collection': 'notifyCollection',
+            'confirm-receipt': 'confirmReceipt',
+            expenses: 'addExpense',
+            settle: 'settle',
+            reminders: 'sendReminder',
+            'return-for-correction': 'returnForCorrection',
+            finalize: 'finalize',
+          } as Record<string, string>
+        )[name];
+    if (!known || !visibleRequest(known).allowedActions.includes(actionName))
+      throw new Error('You are no longer eligible for this action. Refresh the request.');
     return mutate(
       `${id}:${name}`,
       async (key) => {
@@ -296,7 +468,7 @@ export const useFloatStore = defineStore('float', () => {
             idempotent ? key : undefined,
           );
           details.value[id] = r;
-          return r;
+          return visibleRequest(r);
         } catch (e) {
           if (e instanceof Error && 'status' in e && e.status === 409)
             await fetchRequest(id).catch(() => undefined);
@@ -306,18 +478,22 @@ export const useFloatStore = defineStore('float', () => {
       idempotent,
     );
   }
-  const createRequest = (p: {
+  const createRequest = async (p: {
     purpose: string;
     requestedAmount: number;
     estimatedClosingDate: string;
-  }) =>
-    mutate('create', () =>
+  }) => {
+    await refreshAccess(true);
+    if (!currentUser.value.capabilities.createRequest)
+      throw new Error('You need request permission and an active requester staff assignment.');
+    return mutate('create', () =>
       api<PettyCashRequest>('/requests', 'POST', {
         purpose: p.purpose,
         requestedAmount: p.requestedAmount,
         neededBy: p.estimatedClosingDate,
       }),
     );
+  };
   const updateRequest = (
     id: string,
     p: { purpose: string; requestedAmount: number; neededBy: string },
@@ -362,12 +538,23 @@ export const useFloatStore = defineStore('float', () => {
         ),
       true,
     );
-  const uploadReceipt = (file: File) =>
-    api<{ fileId: string; fileName: string }>('/files', 'POST', { file }, undefined, true);
-  const extractReceipt = (fileId: string) =>
-    api<ReceiptExtraction>('/ocr/receipts', 'POST', { fileId });
-  const extractReceipts = (fileIds: string[]) =>
-    api<BulkReceiptExtraction>('/ocr/receipts', 'POST', { fileIds });
+  async function requireReceiptAccess(capability: string) {
+    await refreshAccess(true);
+    if (!staffEligibility.value.requester || !currentUser.value.capabilities[capability])
+      throw new Error('You need receipt permission and an active requester staff assignment.');
+  }
+  const uploadReceipt = async (file: File) => {
+    await requireReceiptAccess('uploadReceipts');
+    return api<{ fileId: string; fileName: string }>('/files', 'POST', { file }, undefined, true);
+  };
+  const extractReceipt = async (fileId: string) => {
+    await requireReceiptAccess('extractReceipts');
+    return api<ReceiptExtraction>('/ocr/receipts', 'POST', { fileId });
+  };
+  const extractReceipts = async (fileIds: string[]) => {
+    await requireReceiptAccess('extractReceipts');
+    return api<BulkReceiptExtraction>('/ocr/receipts', 'POST', { fileIds });
+  };
   async function receiptUrl(fileId: string) {
     if (blobs.has(fileId)) return blobs.get(fileId)!;
     // useHttp's download option opens a window and cannot return protected preview bytes.
@@ -397,8 +584,14 @@ export const useFloatStore = defineStore('float', () => {
     }>('/reports/reconciliation');
   return {
     currentUser,
-    requests,
-    allRequests: requests,
+    staffAssignments,
+    staffEligibility,
+    refreshAccess,
+    lookupStaff,
+    addStaffAssignment,
+    removeStaffAssignment,
+    requests: visibleRequests,
+    allRequests: visibleRequests,
     details,
     fund,
     transactions,
@@ -413,6 +606,9 @@ export const useFloatStore = defineStore('float', () => {
     busy,
     error,
     accessError,
+    pageDenied,
+    canViewPage,
+    firstAllowedPage,
     notifications,
     notificationTotal,
     cashWithStaff: computed(() => stats.value.cashWithStaff),
@@ -429,7 +625,8 @@ export const useFloatStore = defineStore('float', () => {
     markRead,
     fetchStats,
     fetchFund,
-    getRequestById: (id: string) => details.value[id],
+    getRequestById: (id: string) =>
+      details.value[id] ? visibleRequest(details.value[id]) : undefined,
     nextPage: (page: number) => fetchRequests({ ...listQuery, page }),
     createRequest,
     updateRequest,
