@@ -3,13 +3,13 @@ import {
   NotFoundException,
   ConflictException,
   ServiceUnavailableException,
-  OnModuleDestroy,
+  Inject,
+  Logger,
 } from '@nestjs/common';
-import { ClientGrpc, ClientProxy, ClientProxyFactory, Transport } from '@nestjs/microservices';
-import { credentials, status } from '@grpc/grpc-js';
+import { ClientGrpc } from '@nestjs/microservices';
+import { status } from '@grpc/grpc-js';
 import { CommonServiceClient, COMMON_SERVICE_NAME } from '@pension/proto/dist/common/common.pb';
-import { GoogleAuth } from 'google-auth-library';
-import { firstValueFrom, timeout } from 'rxjs';
+import { firstValueFrom, timeout, TimeoutError } from 'rxjs';
 import { z } from 'zod';
 
 const employeeSchema = z.object({
@@ -23,59 +23,33 @@ const employeeSchema = z.object({
 });
 
 @Injectable()
-export class StaffDirectoryService implements OnModuleDestroy {
-  private client?: ClientProxy & ClientGrpc;
-  private connecting?: Promise<CommonServiceClient>;
-
-  private service(): Promise<CommonServiceClient> {
-    if (!this.connecting) {
-      this.connecting = this.connect().catch((error: unknown) => {
-        this.connecting = undefined;
-        throw error;
-      });
-    }
-    return this.connecting;
-  }
-
-  private async connect(): Promise<CommonServiceClient> {
-    const target = process.env.COMMON_GRPC_URL;
-    if (!target)
-      throw new ServiceUnavailableException('Petty Cash employee lookup is not configured.');
-    const production = process.env.APP_ENV !== 'development';
-    const channel = production ? credentials.createSsl() : credentials.createInsecure();
-    const auth = production
-      ? await new GoogleAuth().getIdTokenClient(
-          process.env.COMMON_GRPC_AUDIENCE || `https://${target.replace(/:443$/, '')}`,
-        )
-      : undefined;
-    this.client = ClientProxyFactory.create({
-      transport: Transport.GRPC,
-      options: {
-        url: target,
-        package: 'common',
-        protoPath: require.resolve('@pension/proto/dist/common/common.proto'),
-        loader: { keepCase: true, defaults: true },
-        credentials: auth
-          ? credentials.combineChannelCredentials(
-              channel,
-              credentials.createFromGoogleCredential(auth),
-            )
-          : channel,
-      },
-    });
-    return this.client.getService<CommonServiceClient>(COMMON_SERVICE_NAME);
-  }
+export class StaffDirectoryService {
+  private readonly logger = new Logger(StaffDirectoryService.name);
+  constructor(@Inject(COMMON_SERVICE_NAME) private readonly commonGrpcClient: ClientGrpc) {}
 
   async findByEmail(email: string) {
+    let stage: 'connection' | 'rpc' | 'response' = 'connection';
+    let reason: string | undefined;
     try {
-      const service = await this.service();
-      const result = employeeSchema.parse(
-        await firstValueFrom(service.findStaffByEmail({ email }).pipe(timeout(10000))),
+      const service = this.commonGrpcClient.getService<CommonServiceClient>(COMMON_SERVICE_NAME);
+      stage = 'rpc';
+      if (typeof service.findStaffByEmail !== 'function') {
+        reason = 'CLIENT_RPC_MISSING';
+        throw new ServiceUnavailableException(
+          'Petty Cash could not reach the employee directory. Please try again.',
+        );
+      }
+      const response = await firstValueFrom(
+        service.findStaffByEmail({ email }).pipe(timeout(10000)),
       );
-      if (result.email.toLowerCase() !== email.toLowerCase())
+      stage = 'response';
+      const result = employeeSchema.parse(response);
+      if (result.email.toLowerCase() !== email.toLowerCase()) {
+        reason = 'EMAIL_MISMATCH';
         throw new ServiceUnavailableException(
           'Employee lookup returned a different email. Try again.',
         );
+      }
       return {
         employeeId: result.entity_id,
         rcn: result.rcn || null,
@@ -86,7 +60,6 @@ export class StaffDirectoryService implements OnModuleDestroy {
         department: result.department,
       };
     } catch (error) {
-      if (error instanceof ServiceUnavailableException) throw error;
       const code = (error as { code?: number })?.code;
       if (code === status.NOT_FOUND)
         throw new NotFoundException('No active employee found for this work email.');
@@ -94,13 +67,38 @@ export class StaffDirectoryService implements OnModuleDestroy {
         throw new ConflictException(
           'More than one employee uses this email. Ask HR to correct the directory.',
         );
+      // Do not log the email, response, metadata, or raw upstream error: these may
+      // contain personal data or credentials. Retain diagnostic codes and stage.
+      const grpcStatus = typeof code === 'number' ? status[code] : undefined;
+      const upstreamHttpStatus = (error as { response?: { status?: number } })?.response?.status;
+      this.logger.error({
+        event: 'staff_directory_lookup_failed',
+        rpc: 'common.CommonService/FindStaffByEmail',
+        stage,
+        reason:
+          reason ||
+          (error instanceof z.ZodError
+            ? 'INVALID_RESPONSE'
+            : error instanceof TimeoutError
+              ? 'TIMEOUT'
+              : grpcStatus ||
+                (stage === 'connection'
+                  ? process.env.COMMON_GRPC_URL
+                    ? 'CLIENT_INITIALIZATION_FAILED'
+                    : 'DIRECTORY_NOT_CONFIGURED'
+                  : 'UNEXPECTED_ERROR')),
+        grpcCode: grpcStatus ? code : undefined,
+        upstreamHttpStatus: typeof upstreamHttpStatus === 'number' ? upstreamHttpStatus : undefined,
+        transport: process.env.APP_ENV === 'production' ? 'tls_with_google_id_token' : 'insecure',
+        invalidFields:
+          error instanceof z.ZodError
+            ? error.issues.map((issue) => ({ path: issue.path.join('.'), code: issue.code }))
+            : undefined,
+      });
+      if (error instanceof ServiceUnavailableException) throw error;
       throw new ServiceUnavailableException(
         'Petty Cash could not reach the employee directory. Please try again.',
       );
     }
-  }
-
-  onModuleDestroy() {
-    this.client?.close();
   }
 }
