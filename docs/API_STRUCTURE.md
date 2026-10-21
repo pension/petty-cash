@@ -40,7 +40,7 @@ Zod input schemas and inferred DTOs are stored in each feature's `dto/` folder. 
 ## Configuration migration
 
 - Set `MPAO_ENTITY_ID` to the verified numeric MPAO entity ID from Bifrost; the previous UUID configuration is no longer used.
-- Set `NUXT_PUBLIC_API_BASE` to the API origin without `/api/float`.
+- Set `PETTY_CASH_API_URL` to the API origin without `/api/float`.
 - Update scheduler commands to `node dist/src/cli.js maintenance`.
 - No database migration is required. Old prefixed routes and a local `/me` return 404.
 

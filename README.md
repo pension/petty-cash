@@ -64,10 +64,12 @@ See [AGENTS.md](AGENTS.md), [backend PRD](docs/FLOAT_BACKEND_PRD.md), and [imple
 
 Each feature has its own Nest module, controller, service and input DTOs; see [API structure](docs/API_STRUCTURE.md). Identity comes from Bifrost `/me`; the local `/access` endpoint returns roles/capabilities only. `IdentityGuard` verifies authentication and `EntityGuard` checks the active MPAO entity.
 
-For existing configuration, replace `MPAO_ORGANISATION_UUID` with the verified numeric `MPAO_ENTITY_ID`, and set `NUXT_PUBLIC_API_BASE` to the API origin (for example `http://localhost:4000`) without `/api/float`. No database migration is required for this structural refactor. The old prefixed routes and local `/me` endpoint are intentionally unavailable.
+For existing configuration, replace `MPAO_ORGANISATION_UUID` with the verified numeric `MPAO_ENTITY_ID`, and set `PETTY_CASH_API_URL` to the API origin (for example `http://localhost:4000`) without `/api/float`. No database migration is required for this structural refactor. The old prefixed routes and local `/me` endpoint are intentionally unavailable.
 
 Permission setup and bulk SQL: [PERMISSIONS.md](docs/PERMISSIONS.md). Use `APP_NAME=petty-cash`; development skips permissions through Midgard while retaining authentication, MPAO and workflow checks.
 
 ## Staff Settings
 
 Settings manages requester and approver staff assignments using an email lookup through common-grpc. Frontend request/approval actions require active staff assignments in addition to existing permissions; backend business authorization is unchanged. See [staff settings and rollout](docs/STAFF_SETTINGS.md) for the shared proto release, gRPC configuration, additive database migration, Bifrost permissions and first-time setup. No real staff are seeded.
+
+The UI reads `PETTY_CASH_API_URL` when Nuxt loads its configuration. Include it in the UI build environment (for example, its `.env` assembled from Secret Manager), using the HTTPS API origin in testing/production. Rebuild and redeploy the UI after changing it. `NUXT_PUBLIC_API_BASE` remains supported for existing installations and is Nuxt's runtime override for `public.apiBase`; remove a stale override when switching to the shared variable.
