@@ -49,7 +49,7 @@ export class NotificationsService {
     const [rows, total, unread] = await this.db.$transaction([
       this.db.notification.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         skip: (page - 1) * pageSize,
         take: pageSize,
         include: { reads: { where: { userId: a.id } } },

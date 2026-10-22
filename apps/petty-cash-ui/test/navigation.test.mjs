@@ -236,3 +236,137 @@ test('failed access refresh clears eligibility, and Settings has a dedicated vie
   assert.equal(store.staffEligibility.requester, false);
   assert.equal(store.staffEligibility.approver, false);
 });
+
+for (const [name, fetch, rows, total, current, loading, endpoint, size] of [
+  ['requests', 'nextPage', 'requests', 'listTotal', 'listPage', 'listLoading', '/requests/history', 10],
+  ['ledger', 'fetchTransactions', 'transactions', 'transactionTotal', 'transactionPage', 'transactionLoading', '/fund/transactions', 5],
+  ['counts', 'fetchCounts', 'reconciliations', 'countTotal', 'countPage', 'countLoading', '/vault-counts', 10],
+  ['notifications', 'fetchNotifications', 'notifications', 'notificationTotal', 'notificationPage', 'notificationLoading', '/notifications', 20],
+]) {
+  test(`${name}: late page responses and failures cannot replace the newest page`, async () => {
+    const old = defer();
+    let fail = false;
+    const { store } = setup({ handler: (path, _options, url) => {
+      if (path !== endpoint) return;
+      if (url.searchParams.get('page') === '2') return old.promise;
+      if (fail) return { success: false, status: 503, error: { message: 'Try again' } };
+      return ok({ data: [{ id: 'current', allowedActions: [] }], page: 3, pageSize: size, total: size * 3 });
+    } });
+    if (name === 'requests') await store.initialize('/requests');
+    const first = store[fetch](2);
+    const latest = store[fetch](3);
+    assert.equal(store[loading], true);
+    await latest;
+    old.resolve({ success: false, status: 503, error: { message: 'Stale error' } });
+    await first;
+    assert.equal(store[current], 3);
+    assert.equal(store[rows][0].id, 'current');
+    assert.equal(store[loading], false);
+    fail = true;
+    await assert.rejects(store[fetch](1), /Try again/);
+    assert.equal(store[current], 3);
+    assert.equal(store[total], size * 3);
+    assert.equal(store[rows][0].id, 'current');
+    assert.equal(store[loading], false);
+  });
+
+  test(`${name}: an emptied final page falls back to the last available page`, async () => {
+    const { store, calls } = setup({ handler: (path, _options, url) => {
+      if (path !== endpoint) return;
+      const requested = Number(url.searchParams.get('page') || 1);
+      return ok({ data: requested === 3 ? [] : [{ id: 'remaining', allowedActions: [] }], page: requested, pageSize: size, total: size + 1 });
+    } });
+    if (name === 'requests') await store.initialize('/requests');
+    await store[fetch](3);
+    assert.equal(store[current], 2);
+    assert.equal(store[rows][0].id, 'remaining');
+    assert.equal(new URLSearchParams(calls.at(-1).query).get('page'), '2');
+    store.reset();
+    assert.equal(store[current], 1);
+    assert.equal(store[total], 0);
+  });
+}
+
+test('History search stays on its permission endpoint and preserves query/sort across pages and refresh', async () => {
+  const { store, calls } = setup({ capabilities: { viewHistory: true }, handler: (path, _options, url) => {
+    if (path === '/requests/history') return ok({ ...page, page: Number(url.searchParams.get('page') || 1), total: 35 });
+  } });
+  await store.initialize('/requests');
+  await store.fetchRequests({ q: 'Paper & pens', page: 1, sort: 'closedAt', order: 'desc' }, '/requests/history');
+  await store.nextPage(2);
+  await store.initialize('/requests');
+  for (const call of calls.slice(-2)) {
+    const query = new URLSearchParams(call.query);
+    assert.equal(call.path, '/requests/history');
+    assert.equal(query.get('q'), 'Paper & pens');
+    assert.equal(query.get('sort'), 'closedAt');
+    assert.equal(query.get('page'), '2');
+  }
+  await store.fetchRequests({ q: '', page: 1 }, '/requests/history');
+  assert.equal(new URLSearchParams(calls.at(-1).query).has('q'), false);
+  assert.equal(store.listPage, 1);
+});
+
+test('Finance filters reset to page one, paginate within the tab, and survive refresh', async () => {
+  const { store, calls } = setup({ capabilities: { viewFinance: true }, handler: (path, _options, url) => {
+    if (path === '/finance') return ok({ ...page, total: 32, page: Number(url.searchParams.get('page') || 1) });
+  } });
+  await store.initialize('/finance');
+  await store.nextPage(3);
+  await store.fetchRequests({ status: 'cash_issued,returned_for_correction', page: 1 }, '/finance');
+  assert.equal(store.listPage, 1);
+  await store.nextPage(2);
+  await store.initialize('/finance');
+  const query = new URLSearchParams(calls.at(-1).query);
+  assert.equal(query.get('status'), 'cash_issued,returned_for_correction');
+  assert.equal(query.get('page'), '2');
+});
+
+test('retrying a failed route change does not inherit the previous page filters', async () => {
+  let fail = true;
+  const { store, calls } = setup({ handler: path => path === '/finance' && fail ? { success: false, status: 503, error: { message: 'Unavailable' } } : undefined });
+  await store.initialize('/requests');
+  await store.fetchRequests({ status: 'closed', q: 'History only' }, '/requests/history');
+  await store.initialize('/finance');
+  fail = false;
+  await store.initialize('/finance');
+  assert.equal(store.error, '');
+  const query = new URLSearchParams(calls.at(-1).query);
+  assert.equal(query.get('status'), 'pending_finance,ready_for_collection');
+  assert.equal(query.has('q'), false);
+});
+
+test('notification polling and marking read keep the selected notification page', async () => {
+  const { store, calls } = setup({ handler: (path, _options, url) => path === '/notifications'
+    ? ok({ ...page, total: 60, pageSize: 20, page: Number(url.searchParams.get('page')) }) : undefined });
+  await store.initialize('/notifications');
+  await store.fetchNotifications(2);
+  await store.fetchNotifications(undefined, 60000);
+  await store.markRead('notice');
+  assert.equal(store.notificationPage, 2);
+  assert.equal(new URLSearchParams(calls.at(-1).query).get('page'), '2');
+});
+
+test('a ledger write refreshes the selected page and resets pagination only on navigation', async () => {
+  const { store } = setup({ handler: (path, _options, url) => path === '/fund/transactions'
+    ? ok({ ...page, total: 20, pageSize: 5, page: Number(url.searchParams.get('page')) }) : undefined });
+  await store.initialize('/fund');
+  await store.fetchTransactions(3);
+  await store.addFundTopUp({ amount: 10, reference: 'test' });
+  assert.equal(store.transactionPage, 3);
+  await store.initialize('/approvals');
+  await store.initialize('/fund');
+  assert.equal(store.transactionPage, 1);
+});
+
+test('retrying request details still reloads them when preserving same-page list state', async () => {
+  let fail = true;
+  const { store, calls } = setup({ handler: path => path === '/requests/PC-1'
+    ? fail ? { success: false, status: 503, error: { message: 'Try again' } } : ok({ id: 'PC-1', allowedActions: [] }) : undefined });
+  await store.initialize('/requests/PC-1');
+  assert.equal(store.error, 'Try again');
+  fail = false;
+  await store.initialize('/requests/PC-1');
+  assert.equal(store.getRequestById('PC-1').id, 'PC-1');
+  assert.equal(calls.filter(call => call.path === '/requests/PC-1').length, 2);
+});

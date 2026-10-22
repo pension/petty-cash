@@ -72,7 +72,8 @@
         <PoPagination
           :total-pages="totalPages"
           :current-page="currentPage"
-          @on-page-change="handlePageChange"
+          @prev-click="handlePageChange(currentPage - 1)"
+          @next-click="handlePageChange(currentPage + 1)"
         />
       </div>
     </div>
@@ -201,18 +202,18 @@ const statsItems = computed(() => [
   },
 ]);
 
-const currentPage = ref(1);
+const currentPage = computed(() => store.transactionPage);
 const itemsPerPage = 5;
 
 const totalPages = computed(() => Math.ceil(store.transactionTotal / itemsPerPage) || 1);
 
 const paginatedTransactions = computed(() => store.transactions);
 async function handlePageChange(page: number) {
+  if (store.transactionLoading || store.busy || page < 1 || page > totalPages.value) return;
   try {
     await store.fetchTransactions(page);
-    currentPage.value = page;
   } catch (err) {
-    store.error = err instanceof Error ? err.message : 'Could not load ledger.';
+    showToast(err instanceof Error ? err.message : 'Could not load ledger.', 'error');
   }
 }
 
@@ -245,7 +246,6 @@ async function handleConfirmTopUp() {
     });
     topUpForm.reference = '';
     topUpForm.notes = '';
-    currentPage.value = 1;
     showTopUpModal.value = false;
   } catch (err) {
     showToast(err instanceof Error ? err.message : 'Could not complete this action.', 'error');

@@ -27,6 +27,7 @@ type Me = {
   capabilities: Record<string, boolean>;
 };
 type Page<T> = { data: T[]; total: number; page: number; pageSize: number };
+type ListQuery = Record<string, string | number | boolean | undefined>;
 export const useFloatStore = defineStore('float', () => {
   const currentUser = ref<Me>({
     id: '',
@@ -65,7 +66,18 @@ export const useFloatStore = defineStore('float', () => {
     listPage = ref(1),
     listPageSize = ref(10),
     transactionTotal = ref(0),
-    countTotal = ref(0);
+    countTotal = ref(0),
+    transactionPage = ref(1),
+    countPage = ref(1),
+    notificationPage = ref(1),
+    requestQuery = ref<ListQuery>({});
+  const listLoads = {
+    requests: ref(false),
+    transactions: ref(false),
+    counts: ref(false),
+    notifications: ref(false),
+  };
+  const listSequences = { requests: 0, transactions: 0, counts: 0, notifications: 0 };
   const loading = ref(false),
     loadedPage = ref(''),
     busy = ref(false),
@@ -74,10 +86,8 @@ export const useFloatStore = defineStore('float', () => {
     pageDenied = ref(false),
     notifications = ref<FloatNotification[]>([]),
     notificationTotal = ref(0);
-  let listQuery: Record<string, string | number | boolean | undefined> = {},
-    view = '',
+  let view = '',
     generation = 0,
-    requestSequence = 0,
     navigationSequence = 0,
     readEpoch = 0,
     listEndpoint = '/requests';
@@ -106,6 +116,49 @@ export const useFloatStore = defineStore('float', () => {
     readEpoch++;
     pendingReads.clear();
     cachedReads.clear();
+  }
+  function cancelListLoads() {
+    for (const key of Object.keys(listSequences) as (keyof typeof listSequences)[]) {
+      listSequences[key]++;
+      listLoads[key].value = false;
+    }
+  }
+  async function loadList<T>(
+    key: keyof typeof listSequences,
+    endpoint: string,
+    query: ListQuery,
+    apply: (result: Page<T>) => void,
+    ttl = 0,
+  ) {
+    const sequence = ++listSequences[key];
+    const current = () => sequence === listSequences[key];
+    listLoads[key].value = true;
+    const fetchPage = (params: ListQuery) => {
+      const search = new URLSearchParams(
+        Object.entries(params)
+          .filter(([, value]) => value !== undefined && value !== '')
+          .map(([name, value]) => [name, String(value)]),
+      );
+      return read<Page<T>>(`${endpoint}?${search}`, ttl);
+    };
+    try {
+      let result = await fetchPage(query);
+      if (!current()) return;
+      const lastPage = Math.max(1, Math.ceil(result.total / result.pageSize));
+      // A workflow action or another user may have removed the last row on this page.
+      if (result.page > lastPage) {
+        result =
+          result.total === 0
+            ? { ...result, data: [], page: 1 }
+            : await fetchPage({ ...query, page: lastPage });
+      }
+      if (current()) apply(result);
+    } catch (error) {
+      // An older search/page failure must not replace a newer successful result.
+      if (current()) throw error;
+    } finally {
+      if (current()) listLoads[key].value = false;
+    }
   }
   async function read<T>(path: string, ttl = 0): Promise<T> {
     const cached = cachedReads.get(path);
@@ -164,12 +217,14 @@ export const useFloatStore = defineStore('float', () => {
   function reset() {
     generation++;
     navigationSequence++;
-    requestSequence++;
+    cancelListLoads();
     invalidateReads();
     initialization = undefined;
     view = '';
     listEndpoint = '/requests';
-    listQuery = {};
+    requestQuery.value = {};
+    listPage.value = transactionPage.value = countPage.value = notificationPage.value = 1;
+    listPageSize.value = 10;
     pageDenied.value = false;
     loading.value = false;
     loadedPage.value = '';
@@ -284,44 +339,52 @@ export const useFloatStore = defineStore('float', () => {
     details.value[id] = r;
     return visibleRequest(r);
   }
-  async function fetchRequests(
-    query: Record<string, string | number | boolean | undefined> = {},
-    endpoint = listEndpoint,
-  ) {
-    listEndpoint = endpoint;
-    listQuery = { ...query };
-    const sequence = ++requestSequence;
-    const q = new URLSearchParams(
-      Object.entries(query)
-        .filter(([, v]) => v !== undefined && v !== '')
-        .map(([k, v]) => [k, String(v)]),
-    );
-    const page = await read<Page<PettyCashSummary>>(`${endpoint}?${q}`);
-    if (sequence !== requestSequence) return;
-    requests.value = page.data;
-    listTotal.value = page.total;
-    listPage.value = page.page;
-    listPageSize.value = page.pageSize;
+  async function fetchRequests(query: ListQuery = {}, endpoint = listEndpoint) {
+    await loadList<PettyCashSummary>('requests', endpoint, query, (result) => {
+      listEndpoint = endpoint;
+      requestQuery.value = { ...query, page: result.page, pageSize: result.pageSize };
+      requests.value = result.data;
+      listTotal.value = result.total;
+      listPage.value = result.page;
+      listPageSize.value = result.pageSize;
+    });
   }
   async function fetchTransactions(page = 1) {
-    const r = await read<Page<FundTransaction>>(`/fund/transactions?page=${page}&pageSize=5`);
-    transactions.value = r.data;
-    transactionTotal.value = r.total;
+    await loadList<FundTransaction>(
+      'transactions',
+      '/fund/transactions',
+      { page, pageSize: 5 },
+      (r) => {
+        transactions.value = r.data;
+        transactionTotal.value = r.total;
+        transactionPage.value = r.page;
+      },
+    );
   }
   async function fetchCounts(page = 1) {
-    const r = await read<Page<DailyReconciliation>>(`/vault-counts?page=${page}&pageSize=10`);
-    reconciliations.value = r.data;
-    countTotal.value = r.total;
+    await loadList<DailyReconciliation>('counts', '/vault-counts', { page, pageSize: 10 }, (r) => {
+      reconciliations.value = r.data;
+      countTotal.value = r.total;
+      countPage.value = r.page;
+    });
   }
-  async function fetchNotifications(page = 1, ttl = 0) {
-    const r = await read<Page<FloatNotification>>(`/notifications?page=${page}&pageSize=20`, ttl);
-    notifications.value = r.data;
-    notificationTotal.value = r.total;
+  async function fetchNotifications(page = notificationPage.value, ttl = 0) {
+    await loadList<FloatNotification>(
+      'notifications',
+      '/notifications',
+      { page, pageSize: 20 },
+      (r) => {
+        notifications.value = r.data;
+        notificationTotal.value = r.total;
+        notificationPage.value = r.page;
+      },
+      ttl,
+    );
   }
   async function markRead(id: string) {
     await api(`/notifications/${id}/read`, 'POST');
     invalidateReads();
-    await fetchNotifications(1, 60000);
+    await fetchNotifications(notificationPage.value, 60000);
   }
   function initialize(path: string): Promise<void> {
     if (initialization?.path === path) return initialization.promise;
@@ -335,11 +398,12 @@ export const useFloatStore = defineStore('float', () => {
   async function loadPage(path: string) {
     const run = ++navigationSequence;
     const context = generation;
+    const refresh = view === path;
     view = path;
     // Shared list data belongs to one route. Never display it on a different page.
     // Keep the current page mounted when refreshing that same route.
     if (loadedPage.value !== path) loadedPage.value = '';
-    requestSequence++;
+    cancelListLoads();
     loading.value = true;
     pageDenied.value = false;
     error.value = '';
@@ -350,7 +414,7 @@ export const useFloatStore = defineStore('float', () => {
         pageDenied.value = true;
         return;
       }
-      await loadPageData(path);
+      await loadPageData(path, refresh, true);
       if (run === navigationSequence && context === generation) loadedPage.value = path;
     } catch (e) {
       if (run === navigationSequence && context === generation)
@@ -359,10 +423,11 @@ export const useFloatStore = defineStore('float', () => {
       if (run === navigationSequence && context === generation) loading.value = false;
     }
   }
-  async function loadPageData(path: string, refresh = false) {
+  async function loadPageData(path: string, refresh = false, refreshDetail = false) {
     const caps = currentUser.value.capabilities;
     const jobs: Promise<unknown>[] = [];
-    if (caps.viewNotifications) jobs.push(fetchNotifications(1, 60000));
+    if (caps.viewNotifications)
+      jobs.push(fetchNotifications(refresh ? notificationPage.value : 1, 60000));
     if (
       caps.viewStatistics &&
       ['/', '/approvals', '/finance', '/fund', '/reconciliation'].includes(path)
@@ -370,31 +435,40 @@ export const useFloatStore = defineStore('float', () => {
       jobs.push(fetchStats(30000));
     if (caps.viewFund && ['/fund', '/reconciliation'].includes(path)) jobs.push(fetchFund(30000));
     if (path.startsWith('/requests/')) {
-      if (!refresh) jobs.push(fetchRequest(path.split('/')[2]));
-    } else if (path === '/fund') jobs.push(fetchTransactions());
-    else if (path === '/reconciliation') jobs.push(fetchCounts());
+      if (!refresh || refreshDetail) jobs.push(fetchRequest(path.split('/')[2]));
+    } else if (path === '/fund') jobs.push(fetchTransactions(refresh ? transactionPage.value : 1));
+    else if (path === '/reconciliation') jobs.push(fetchCounts(refresh ? countPage.value : 1));
     else if (path === '/settings') jobs.push(fetchStaffAssignments());
     else if (path === '/approvals')
-      jobs.push(fetchRequests(refresh ? listQuery : {}, '/approvals'));
+      jobs.push(
+        fetchRequests(
+          refresh && listEndpoint === '/approvals' ? requestQuery.value : {},
+          '/approvals',
+        ),
+      );
     else if (path === '/finance')
       jobs.push(
         fetchRequests(
-          refresh ? listQuery : { status: 'pending_finance,ready_for_collection' },
+          refresh && listEndpoint === '/finance'
+            ? requestQuery.value
+            : { status: 'pending_finance,ready_for_collection' },
           '/finance',
         ),
       );
     else if (path === '/requests')
       jobs.push(
         fetchRequests(
-          refresh ? listQuery : { sort: 'closedAt', order: 'desc' },
+          refresh && listEndpoint === '/requests/history'
+            ? requestQuery.value
+            : { sort: 'closedAt', order: 'desc' },
           '/requests/history',
         ),
       );
     else if (path === '/')
       jobs.push(
         fetchRequests(
-          refresh
-            ? listQuery
+          refresh && listEndpoint === '/requests'
+            ? requestQuery.value
             : {
                 mine: true,
                 status:
@@ -564,15 +638,21 @@ export const useFloatStore = defineStore('float', () => {
     await requireReceiptAccess('extractReceipts');
     return api<BulkReceiptExtraction>('/ocr/receipts', 'POST', { fileIds });
   };
-  async function receiptUrl(fileId: string) {
-    if (blobs.has(fileId)) return blobs.get(fileId)!;
+  async function receiptBlob(fileId: string) {
+    const context = generation;
     // useHttp's download option opens a window and cannot return protected preview bytes.
     const token = localStorage.getItem('access_token');
-    const response = await fetch(`${base()}/files/${fileId}`, {
+    const response = await fetch(`${base()}/files/${encodeURIComponent(fileId)}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!response.ok) throw new Error('Could not open the receipt.');
-    const url = URL.createObjectURL(await response.blob());
+    const blob = await response.blob();
+    if (context !== generation) throw new Error('Petty Cash context changed.');
+    return blob;
+  }
+  async function receiptUrl(fileId: string) {
+    if (blobs.has(fileId)) return blobs.get(fileId)!;
+    const url = URL.createObjectURL(await receiptBlob(fileId));
     blobs.set(fileId, url);
     return url;
   }
@@ -609,6 +689,14 @@ export const useFloatStore = defineStore('float', () => {
     listTotal,
     listPage,
     listPageSize,
+    requestQuery: computed(() => requestQuery.value),
+    listLoading: listLoads.requests,
+    transactionLoading: listLoads.transactions,
+    countLoading: listLoads.counts,
+    notificationLoading: listLoads.notifications,
+    transactionPage,
+    countPage,
+    notificationPage,
     transactionTotal,
     countTotal,
     loading,
@@ -637,7 +725,7 @@ export const useFloatStore = defineStore('float', () => {
     fetchFund,
     getRequestById: (id: string) =>
       details.value[id] ? visibleRequest(details.value[id]) : undefined,
-    nextPage: (page: number) => fetchRequests({ ...listQuery, page }),
+    nextPage: (page: number) => fetchRequests({ ...requestQuery.value, page }),
     createRequest,
     updateRequest,
     approveRequestByManager,
@@ -658,6 +746,7 @@ export const useFloatStore = defineStore('float', () => {
     extractReceipt,
     extractReceipts,
     receiptUrl,
+    receiptBlob,
     report,
   };
 });

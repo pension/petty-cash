@@ -916,10 +916,10 @@ async function handleConfirmCorrection() {
 const isDownloading = ref(false);
 
 async function handleDownloadPdf() {
-  if (!request.value) return;
+  if (!request.value || isDownloading.value) return;
   isDownloading.value = true;
   try {
-    await downloadRequestPdf(request.value);
+    await downloadRequestPdf(await store.fetchRequest(request.value.id), store.receiptBlob);
   } catch (err) {
     showToast(err instanceof Error ? err.message : 'Could not generate the voucher.', 'error');
   } finally {

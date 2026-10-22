@@ -15,11 +15,7 @@
     <div v-else class="space-y-5 pb-8">
       <FloatStats />
 
-      <PoTabs
-        :tabs="tabs"
-        :current-tab="activeTab"
-        @button-click="(tab: Tab) => (activeTab = tab.name)"
-      />
+      <PoTabs :tabs="tabs" :current-tab="activeTab" @button-click="changeTab" />
 
       <PoCard>
         <ListTable v-if="activeList.length > 0" :columns="columns">
@@ -142,21 +138,24 @@ const TAB_PENDING = 'Pending Disbursement';
 const TAB_DISBURSED = 'Disbursed';
 const TAB_SETTLED = 'Settled';
 
-const activeTab = ref(TAB_PENDING);
-
-watch(activeTab, async () => {
-  const statuses: Record<string, string> = {
-    'Heads-up': 'pending_approval',
-    'Pending Disbursement': 'pending_finance,ready_for_collection',
-    Disbursed: 'cash_issued,returned_for_correction',
-    Settled: 'pending_closure',
-  };
+const statuses: Record<string, string> = {
+  'Heads-up': 'pending_approval',
+  'Pending Disbursement': 'pending_finance,ready_for_collection',
+  Disbursed: 'cash_issued,returned_for_correction',
+  Settled: 'pending_closure',
+};
+const activeTab = computed(
+  () =>
+    Object.keys(statuses).find((name) => statuses[name] === store.requestQuery.status) ||
+    TAB_PENDING,
+);
+async function changeTab(tab: Tab) {
   try {
-    await store.fetchRequests({ status: statuses[activeTab.value] });
+    await store.fetchRequests({ status: statuses[tab.name], page: 1 }, '/finance');
   } catch (err) {
-    store.error = err instanceof Error ? err.message : 'Could not load Finance desk.';
+    showToast(err instanceof Error ? err.message : 'Could not load Finance desk.', 'error');
   }
-});
+}
 const byStatus = (statuses: RequestStatus[]) =>
   computed(() => store.allRequests.filter((r) => statuses.includes(r.status)));
 

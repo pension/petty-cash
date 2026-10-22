@@ -24,11 +24,11 @@
     <div v-if="store.isPageReady('/notifications')" class="flex justify-end gap-3 py-4">
       <PoButton
         label="Previous"
-        :disabled="store.busy || page === 1"
+        :disabled="store.busy || store.notificationLoading || page === 1"
         @button-click="change(page - 1)"
       /><PoButton
         label="Next"
-        :disabled="page * 20 >= store.notificationTotal"
+        :disabled="store.busy || store.notificationLoading || page * 20 >= store.notificationTotal"
         @button-click="change(page + 1)"
       /></div
   ></PoContentArea>
@@ -48,12 +48,18 @@ import { useFloatStore } from '~/stores/useFloatStore';
 definePageMeta({ layout: 'main' });
 const store = useFloatStore(),
   router = useRouter(),
-  page = ref(1);
+  page = computed(() => store.notificationPage);
 const { showToast } = useToastify();
 async function change(p: number) {
+  if (
+    store.notificationLoading ||
+    store.busy ||
+    p < 1 ||
+    p > Math.ceil(store.notificationTotal / 20)
+  )
+    return;
   try {
     await store.fetchNotifications(p);
-    page.value = p;
   } catch (e) {
     showToast(e instanceof Error ? e.message : 'Could not load notifications', 'error');
   }

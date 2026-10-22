@@ -87,9 +87,10 @@
           </ListTable>
           <div v-if="store.countTotal > 10" class="p-4 flex justify-end border-t border-slate-200">
             <PoPagination
-              :current-page="countPage"
+              :current-page="store.countPage"
               :total-pages="Math.ceil(store.countTotal / 10)"
-              @page-change="changeCountPage"
+              @prev-click="changeCountPage(store.countPage - 1)"
+              @next-click="changeCountPage(store.countPage + 1)"
             />
           </div>
         </PoCard>
@@ -461,11 +462,11 @@ useHead({
 const store = useFloatStore();
 const { showToast } = useToastify();
 
-const countPage = ref(1);
 async function changeCountPage(page: number) {
+  if (store.countLoading || store.busy || page < 1 || page > Math.ceil(store.countTotal / 10))
+    return;
   try {
     await store.fetchCounts(page);
-    countPage.value = page;
   } catch (err) {
     showToast(err instanceof Error ? err.message : 'Could not load counts.', 'error');
   }
@@ -609,7 +610,6 @@ async function handleSaveCount() {
       notes: notes.value,
     });
 
-    countPage.value = 1;
     showToast('Physical cash count recorded successfully', 'success');
 
     // Reset form

@@ -8,7 +8,7 @@ import type {
 import { FLOAT_DENOMINATIONS, floatAmount, cashDifference, cashSum } from '~/utils/floatStatus';
 
 // PDFs are rendered from an HTML string with inline styles (html2canvas ignores app CSS classes
-// it can't resolve off-screen), then saved straight to a file with html2pdf.js.
+// it can't resolve off-screen). Request receipts are appended before the single download.
 
 const esc = (v: unknown) =>
   String(v ?? '').replace(
@@ -65,7 +65,7 @@ function footer() {
   return `<p style="margin-top:18px;color:#94a3b8;font-size:9px;">Generated ${esc(now())}. System-generated document.</p>`;
 }
 
-async function save(html: string, filename: string) {
+async function save(html: string, filename: string, append?: (voucher: Blob) => Promise<Blob>) {
   const { default: html2pdf } = await import('html2pdf.js');
   const blob = await html2pdf()
     .set({
@@ -86,7 +86,7 @@ async function save(html: string, filename: string) {
     })
     .from(`<div style="${STYLE.page}">${html}</div>`, 'string')
     .outputPdf('blob');
-  const url = URL.createObjectURL(blob);
+  const url = URL.createObjectURL(append ? await append(blob) : blob);
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
@@ -103,7 +103,10 @@ async function save(html: string, filename: string) {
 // ---------------------------------------------------------------------------
 // Closed request voucher
 // ---------------------------------------------------------------------------
-export async function downloadRequestPdf(req: PettyCashRequest) {
+export async function downloadRequestPdf(
+  req: PettyCashRequest,
+  loadReceipt: (fileId: string) => Promise<Blob>,
+) {
   const spent = req.expenseTotal ?? cashSum(req.expenses.map((e) => e.amount));
   const returned = cashSum(req.returns.map((r) => r.actualAmount));
   const received = req.totalCashIssued || floatAmount(req);
@@ -176,7 +179,10 @@ export async function downloadRequestPdf(req: PettyCashRequest) {
     ${signatures}
     ${footer()}`;
 
-  await save(html, `${req.id}.pdf`);
+  await save(html, `${req.id}.pdf`, async (voucher) => {
+    const { appendReceiptPdfs } = await import('~/utils/receiptPdf');
+    return appendReceiptPdfs(voucher, req.expenses, loadReceipt);
+  });
 }
 
 // ---------------------------------------------------------------------------

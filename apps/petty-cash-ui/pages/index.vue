@@ -22,8 +22,8 @@
           <div class="flex items-center gap-2">
             <PoHeading type="h2" size="sm" class="text-slate-900">My Active Petty Cash</PoHeading>
             <PoStatusPill
-              v-if="myActiveRequests.length"
-              :label="`${myActiveRequests.length}`"
+              v-if="store.listTotal"
+              :label="`${store.listTotal}`"
               color="blue"
             />
           </div>

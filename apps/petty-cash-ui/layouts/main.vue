@@ -166,9 +166,10 @@ onMounted(() => {
     if (
       document.visibilityState === 'visible' &&
       store.currentUser.capabilities.viewNotifications &&
+      !store.notificationLoading &&
       !store.accessError
     )
-      void store.fetchNotifications(1, 60000).catch(() => undefined);
+      void store.fetchNotifications(undefined, 60000).catch(() => undefined);
   }, 60000);
 });
 onBeforeUnmount(() => clearInterval(timer));

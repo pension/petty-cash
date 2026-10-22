@@ -17,8 +17,10 @@
         <div class="flex flex-col lg:flex-row lg:items-center gap-3">
           <div class="grow">
             <PoSearch
-              v-model="searchQuery"
+              :model-value="searchQuery"
               placeholder="Search voucher no, particulars, requester or Dynamics ref..."
+              @button-click="loadHistory(1)"
+              @update:model-value="searchHistory"
             />
           </div>
           <div class="hidden sm:flex shrink-0 items-center gap-3">
@@ -26,7 +28,8 @@
             <PoPagination
               :total-pages="totalPages"
               :current-page="currentPage"
-              @on-page-change="(p: number) => (currentPage = p)"
+              @prev-click="changePage(currentPage - 1)"
+              @next-click="changePage(currentPage + 1)"
             />
           </div>
         </div>
@@ -57,7 +60,7 @@
                 action-type="ghost"
                 label="PDF"
                 :icon="ArrowDownTrayIcon"
-                :disabled="store.busy || downloadingId === item.id"
+                :disabled="store.busy || downloadingId !== null"
                 @button-click="handleDownload(item)"
               />
             </template>
@@ -79,7 +82,8 @@
         <PoPagination
           :total-pages="totalPages"
           :current-page="currentPage"
-          @on-page-change="(p: number) => (currentPage = p)"
+          @prev-click="changePage(currentPage - 1)"
+          @next-click="changePage(currentPage + 1)"
         />
       </div>
     </div>
@@ -100,6 +104,7 @@ import {
   PoPageTitle,
   PoPagination,
   PoSearch,
+  useToastify,
 } from '@pension/ui-kit';
 import ListRow, { type ListCell } from '~/components/float/ListRow.vue';
 import ListTable, { type ListColumn } from '~/components/float/ListTable.vue';
@@ -117,32 +122,48 @@ useHead({
 });
 
 const store = useFloatStore();
+const { showToast } = useToastify();
 
-const searchQuery = ref('');
-const currentPage = ref(1);
+const searchQuery = ref(String(store.requestQuery.q || ''));
+const currentPage = computed(() => store.listPage);
 const itemsPerPage = 10;
 
 const closedRequests = computed(() => store.allRequests);
 const filteredRequests = closedRequests;
 const paginatedRequests = closedRequests;
 const totalPages = computed(() => Math.ceil(store.listTotal / itemsPerPage) || 1);
-watch([searchQuery, currentPage], async () => {
+async function loadHistory(page: number) {
   try {
-    await store.fetchRequests({
-      status: 'closed',
-      sort: 'closedAt',
-      order: 'desc',
-      q: searchQuery.value,
-      page: currentPage.value,
-      pageSize: itemsPerPage,
-    });
+    await store.fetchRequests(
+      {
+        status: 'closed',
+        sort: 'closedAt',
+        order: 'desc',
+        q: searchQuery.value.trim(),
+        page,
+        pageSize: itemsPerPage,
+      },
+      '/requests/history',
+    );
   } catch (err) {
-    store.error = err instanceof Error ? err.message : 'Could not load history.';
+    showToast(err instanceof Error ? err.message : 'Could not load history.', 'error');
   }
-});
-watch(searchQuery, () => {
-  currentPage.value = 1;
-});
+}
+watch(
+  () => store.requestQuery.q,
+  (query) => {
+    const value = String(query || '');
+    if (searchQuery.value.trim() !== value) searchQuery.value = value;
+  },
+);
+async function searchHistory(value: string) {
+  searchQuery.value = value;
+  await loadHistory(1);
+}
+async function changePage(page: number) {
+  if (store.listLoading || store.busy || page < 1 || page > totalPages.value) return;
+  await loadHistory(page);
+}
 
 // Desktop columns
 const columns: ListColumn[] = [
@@ -174,9 +195,12 @@ function cells(item: PettyCashRequest): ListCell[] {
 const downloadingId = ref<string | null>(null);
 
 async function handleDownload(item: PettyCashRequest) {
+  if (downloadingId.value) return;
   downloadingId.value = item.id;
   try {
-    await downloadRequestPdf(await store.fetchRequest(item.id));
+    await downloadRequestPdf(await store.fetchRequest(item.id), store.receiptBlob);
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : 'Could not generate the voucher.', 'error');
   } finally {
     downloadingId.value = null;
   }

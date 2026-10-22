@@ -72,6 +72,7 @@ export class RequestRecordsService {
   }
   async list(q: ListQuery, a: Actor) {
     const { page, pageSize } = parse(pageQuery, q);
+    const search = q.q?.trim();
     const statuses = q.status?.split(',');
     const where: Prisma.FloatRequestWhereInput = {
       ...(statuses ? { status: { in: statuses } } : {}),
@@ -80,13 +81,13 @@ export class RequestRecordsService {
         : q.requesterId
           ? { requesterId: q.requesterId }
           : {}),
-      ...(q.q
+      ...(search
         ? {
             OR: [
-              { id: { contains: q.q } },
-              { purpose: { contains: q.q } },
-              { dynamicsReference: { contains: q.q } },
-              { requester: { path: '$.name', string_contains: q.q } },
+              { id: { contains: search } },
+              { purpose: { contains: search } },
+              { dynamicsReference: { contains: search } },
+              { requester: { path: '$.name', string_contains: search } },
             ],
           }
         : {}),
