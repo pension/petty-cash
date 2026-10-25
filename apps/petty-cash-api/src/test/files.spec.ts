@@ -107,7 +107,7 @@ describe('multipart upload lifecycle', () => {
     permissions: ['files.upload', 'files.download'],
   };
   beforeAll(async () => {
-    directory = await mkdtemp(join(tmpdir(), 'float-upload-test-'));
+    directory = await mkdtemp(join(tmpdir(), 'petty-cash-upload-test-'));
     await mkdir(join(directory, 'petty-cash'));
     process.env.FILE_STORAGE = 'local';
     process.env.FILE_STORAGE_PATH = directory;
@@ -165,7 +165,7 @@ describe('multipart upload lifecycle', () => {
             port,
             method: 'POST',
             headers: {
-              'Content-Type': 'multipart/form-data; boundary=float-test',
+              'Content-Type': 'multipart/form-data; boundary=petty-cash-test',
             },
           },
           (res) => {
@@ -183,7 +183,7 @@ describe('multipart upload lifecycle', () => {
       },
     );
     req!.write(
-      `--float-test\r\nContent-Disposition: form-data; name="file"; filename="receipt.png"\r\nContent-Type: ${type}\r\n\r\n`,
+      `--petty-cash-test\r\nContent-Disposition: form-data; name="file"; filename="receipt.png"\r\nContent-Type: ${type}\r\n\r\n`,
     );
     return { req: req!, result };
   }
@@ -201,7 +201,7 @@ describe('multipart upload lifecycle', () => {
     }
     expect(written).toBe(true);
     expect([...rows.values()].some((r) => r.state === 'ready')).toBe(false);
-    req.end('\r\n--float-test--\r\n');
+    req.end('\r\n--petty-cash-test--\r\n');
     const response = await result;
     expect(response.status).toBe(200);
     expect(response.body.size).toBe(4104);
@@ -224,7 +224,7 @@ describe('multipart upload lifecycle', () => {
       ['image/png', MAX_UPLOAD_BYTES, 413],
     ] as const) {
       const { req, result } = start(type);
-      req.end(Buffer.concat([png, Buffer.alloc(size), Buffer.from('\r\n--float-test--\r\n')]));
+      req.end(Buffer.concat([png, Buffer.alloc(size), Buffer.from('\r\n--petty-cash-test--\r\n')]));
       expect((await result).status).toBe(status);
       expect((await readdir(join(directory, 'petty-cash'))).length).toBe(before);
     }
@@ -251,7 +251,7 @@ describe('multipart upload lifecycle', () => {
     );
     try {
       const { req, result } = start();
-      req.end(Buffer.concat([png, Buffer.alloc(100), Buffer.from('\r\n--float-test--\r\n')]));
+      req.end(Buffer.concat([png, Buffer.alloc(100), Buffer.from('\r\n--petty-cash-test--\r\n')]));
       expect((await result).status).toBe(500);
     } finally {
       writer.mockRestore();

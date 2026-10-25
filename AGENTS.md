@@ -6,7 +6,7 @@ The product name is **Petty Cash**. Use it in all user-facing copy, error messag
 
 ## Source precedence and design
 
-Explicit user decisions take precedence over `docs/FLOAT_BACKEND_PRD.md`; the completed Petty Cash UI in `/Users/naif/Code/Packages/ui-lab` is the visual authority. The original stakeholder PRD is background. The backend PRD's PostgreSQL, class-validator and proxy suggestions are superseded by this repository's MySQL, Zod and direct-HTTP conventions.
+Explicit user decisions take precedence over `docs/PETTY_CASH_BACKEND_PRD.md`; the completed Petty Cash UI in `/Users/naif/Code/Packages/ui-lab` is the visual authority. The original stakeholder PRD is background. The backend PRD's PostgreSQL, class-validator and proxy suggestions are superseded by this repository's MySQL, Zod and direct-HTTP conventions.
 
 Import and preserve ui-lab's Petty Cash screens: layout, spacing, copy, typography, colors, responsive tables/cards, modals and PDFs. Do not redesign them. Use documented `@pension/ui-kit` components for new states. UI-kit reference: https://ui-kit-dev.mpao.mv/mcp (docs-list, docs-show and composition guide). Current UI dependency matches the source: 1.0.39. Do not copy unrelated ui-lab applications or mock users/data.
 
@@ -34,7 +34,7 @@ Commands use a separate Nest application context in `src/cli.ts`, with no HTTP c
 
 GS Staff creates → GS Manager authorizes → Finance prepares and notifies → GS confirms collection → GS records receipts and settles → Finance finalizes → Finance periodically counts the vault.
 
-Statuses: pending_approval → pending_finance → ready_for_collection → cash_issued → pending_closure → closed. Rejection is terminal. Finance can return pending_closure to returned_for_correction; GS corrects and settles again. Approval and rejection depend on their individual permissions and pending_approval status, including for the requester; self-approval is allowed by explicit user decision. Finalization likewise depends on settlements.finalize permission and pending_closure status, including for the requester. Only the owner edits pending requests. Receipts can change only in cash_issued / returned_for_correction. Anyone eligible to add receipts can also remove them on that request; pending_closure and closed lock both actions. Removal retains file evidence and audit history. No direct status DTO. `allowedActions` uses the same policy as mutation authorization.
+Statuses: pending_approval → pending_finance → ready_for_collection → cash_issued → pending_closure → closed. Rejection is terminal. Finance can return pending_closure to returned_for_correction; GS corrects and settles again. Approval and rejection depend on their individual permissions and pending_approval status, including for the requester; self-approval is allowed by explicit user decision. Finalization likewise depends on settlements.finalize permission and pending_closure status, including for the requester. Only the owner edits pending requests. Requested petty cash is capped at MVR 5,000 per request (API `MAX_REQUEST_AMOUNT`, mirrored in the UI). For now `/requests` and `/requests/history` list only the caller's own requests; `GET /requests/:id` is limited to the creator and holders of `approvals.list` or `disbursements.list`. GS Approvals and the Finance Desk list every requester's requests. Receipts can change only in cash_issued / returned_for_correction. Anyone eligible to add receipts can also remove them on that request; pending_closure and closed lock both actions. Removal retains file evidence and audit history. No direct status DTO. `allowedActions` uses the same policy as mutation authorization.
 
 ## Cash and audit invariants
 
@@ -68,7 +68,7 @@ Node 22+, Yarn 1.22.22; GH_PAT for the private package registry. `yarn install`;
 
 Apply migrations only to the intended fresh database with `yarn workspace petty-cash-api db:deploy`. The initial seed (`yarn workspace petty-cash-api db:seed`) uses the approved MVR 0, 2026-10-20, Team opening values and reuses FundBootstrapService. Keep the date fixed and preserve existing balances on reruns. For different approved values use the explicit bootstrap command (README). Never reset the copied source application's database.
 
-`yarn workspace petty-cash-api test --runInBand` runs policy/streaming tests in `src/test`. Set FLOAT_TEST_DATABASE_URL to a dedicated database named float_test to additionally run MySQL workflow/concurrency tests. The financial suite intentionally appends data; it never clears a real fund. See `docs/IMPLEMENTATION.md` for verification and deployment status.
+`yarn workspace petty-cash-api test --runInBand` runs policy/streaming tests in `src/test`. Set PETTY_CASH_TEST_DATABASE_URL to a dedicated database named petty_cash_test to additionally run MySQL workflow/concurrency tests. The financial suite intentionally appends data; it never clears a real fund. See `docs/IMPLEMENTATION.md` for verification and deployment status.
 
 ## Exclusions
 

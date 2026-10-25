@@ -186,6 +186,78 @@ export async function downloadRequestPdf(
 }
 
 // ---------------------------------------------------------------------------
+// Vault counts (shared by the reconciliation report and single-count PDFs)
+// ---------------------------------------------------------------------------
+const statusLabel = (s: DailyReconciliation['status']) =>
+  s === 'balanced' ? 'Balanced' : s === 'resolved' ? 'Resolved' : 'Discrepancy';
+
+function denominationTable(count: DailyReconciliation) {
+  const rows = FLOAT_DENOMINATIONS.map((d) => {
+    const n = Number((count.denominations as unknown as Record<string, number>)[d.key]) || 0;
+    return n
+      ? `<tr><td style="${STYLE.td}">${esc(d.label)}</td><td style="${STYLE.tdR}">${n}</td><td style="${STYLE.tdR}">${esc(formatMoney(n * d.value))}</td></tr>`
+      : '';
+  }).join('');
+  return `<table style="${STYLE.table}margin-top:8px;">
+    <tr><th style="${STYLE.th}">Denomination</th><th style="${STYLE.thR}">Pieces</th><th style="${STYLE.thR}">Value</th></tr>
+    ${rows || `<tr><td colspan="3" style="${STYLE.td}color:#64748b;">No cash counted.</td></tr>`}
+    <tr><td colspan="2" style="${STYLE.td}font-weight:700;">Total counted</td><td style="${STYLE.tdR}font-weight:700;">${esc(formatMoney(count.actualCashCount))}</td></tr>
+  </table>`;
+}
+
+function countDetails(count: DailyReconciliation) {
+  return `${keyValues([
+    ['Counted on', `${formatDate(count.countDate)} by ${count.countedBy}`],
+    ['Ledger balance at count', money(count.expectedBalance)],
+    ['Cash counted', money(count.actualCashCount)],
+    ['Difference', count.difference === 0 ? 'Balanced' : money(count.difference)],
+  ])}${denominationTable(count)}`;
+}
+
+export async function downloadVaultCountPdf(input: {
+  count: DailyReconciliation;
+  fundName: string;
+  preparedBy: string;
+}) {
+  const { count, fundName, preparedBy } = input;
+  const summary: [string, string][] = [
+    ['Status', statusLabel(count.status)],
+    ['Notes', count.notes || '—'],
+  ];
+  if (count.status === 'resolved')
+    summary.push(
+      [
+        'Resolved',
+        [
+          count.resolvedAt && formatDate(count.resolvedAt),
+          count.resolvedBy && `by ${count.resolvedBy}`,
+        ]
+          .filter(Boolean)
+          .join(' ') || '—',
+      ],
+      ['Resolution notes', count.resolutionNotes || '—'],
+    );
+
+  const signatures = `<table style="${STYLE.table}margin-top:28px;"><tr>
+    ${['Counted by', 'Reviewed by']
+      .map(
+        (l) =>
+          `<td style="width:50%;padding-right:16px;"><div style="border-top:1px solid #94a3b8;padding-top:4px;color:#64748b;font-size:10px;">${l}</div></td>`,
+      )
+      .join('')}
+  </tr></table>`;
+
+  const html = `
+    ${header('Vault Count', fundName, `<div style="font-size:14px;font-weight:700;color:#0f172a;">${esc(formatDate(count.countDate))}</div>Prepared by ${esc(preparedBy)}`)}
+    <h2 style="${STYLE.h2}">Count</h2>${countDetails(count)}
+    <h2 style="${STYLE.h2}">Review</h2>${keyValues(summary)}
+    ${signatures}
+    ${footer()}`;
+
+  await save(html, `vault-count-${count.countDate.slice(0, 10)}-${count.id.slice(0, 8)}.pdf`);
+}
+
+// ---------------------------------------------------------------------------
 // Vault reconciliation report
 // ---------------------------------------------------------------------------
 export async function downloadReconciliationReport(input: {
@@ -218,25 +290,8 @@ export async function downloadReconciliationReport(input: {
   ];
 
   const latestCount = latest
-    ? `${keyValues([
-        ['Counted on', `${formatDate(latest.countDate)} by ${latest.countedBy}`],
-        ['Ledger balance at count', money(latest.expectedBalance)],
-        ['Cash counted', money(latest.actualCashCount)],
-        ['Difference', latest.difference === 0 ? 'Balanced' : money(latest.difference)],
-      ])}
-      <table style="${STYLE.table}margin-top:8px;">
-        <tr><th style="${STYLE.th}">Denomination</th><th style="${STYLE.thR}">Pieces</th><th style="${STYLE.thR}">Value</th></tr>
-        ${FLOAT_DENOMINATIONS.map((d) => {
-          const n = Number((latest.denominations as unknown as Record<string, number>)[d.key]) || 0;
-          return n
-            ? `<tr><td style="${STYLE.td}">${esc(d.label)}</td><td style="${STYLE.tdR}">${n}</td><td style="${STYLE.tdR}">${esc(formatMoney(n * d.value))}</td></tr>`
-            : '';
-        }).join('')}
-      </table>`
+    ? countDetails(latest)
     : `<p style="color:#64748b;">No vault counts recorded yet.</p>`;
-
-  const statusLabel = (s: DailyReconciliation['status']) =>
-    s === 'balanced' ? 'Balanced' : s === 'resolved' ? 'Resolved' : 'Discrepancy';
 
   const history = `<table style="${STYLE.table}">
     <tr><th style="${STYLE.th}">Date</th><th style="${STYLE.th}">Counted by</th><th style="${STYLE.thR}">Ledger</th><th style="${STYLE.thR}">Counted</th><th style="${STYLE.thR}">Difference</th><th style="${STYLE.th}">Status</th></tr>

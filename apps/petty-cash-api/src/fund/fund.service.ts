@@ -20,7 +20,7 @@ export class FundService {
   async fund() {
     const [fund, staff] = await this.db.$transaction([
       this.db.fund.findUnique({ where: { id: FUND_ID } }),
-      this.db.floatRequest.aggregate({
+      this.db.pettyCashRequest.aggregate({
         where: { status: { in: active } },
         _sum: { totalCashIssued: true },
       }),

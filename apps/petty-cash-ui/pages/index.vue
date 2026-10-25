@@ -13,7 +13,7 @@
     <PageSkeleton v-if="!store.isPageReady('/')" :stats="4" />
 
     <div v-else class="space-y-6 pb-8">
-      <FloatStats />
+      <PettyCashStats />
 
       <section class="space-y-3">
         <div
@@ -44,8 +44,8 @@
               :to="`/requests/${item.id}`"
               :title="item.purpose"
               :meta="`${item.id} · ${formatDate(item.createdAt)}`"
-              :amount="formatMoney(floatAmount(item))"
-              :status="floatStatus(item.status)"
+              :amount="formatMoney(pettyCashAmount(item))"
+              :status="pettyCashStatus(item.status)"
               :cells="cells(item)"
             >
               <template
@@ -109,10 +109,10 @@
 </template>
 
 <script setup lang="ts">
-import PageSkeleton from '~/components/float/PageSkeleton.vue';
-import { formatDate, formatMoney } from '~/utils/floatFormat';
+import PageSkeleton from '~/components/petty-cash/PageSkeleton.vue';
+import { formatDate, formatMoney } from '~/utils/pettyCashFormat';
 
-import RequestPagination from '~/components/float/RequestPagination.vue';
+import RequestPagination from '~/components/petty-cash/RequestPagination.vue';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import {
@@ -132,13 +132,13 @@ import {
   PoStatusPill,
   useToastify,
 } from '@pension/ui-kit';
-import FloatStats from '~/components/float/FloatStats.vue';
-import ListRow, { type ListCell } from '~/components/float/ListRow.vue';
-import ListTable, { type ListColumn } from '~/components/float/ListTable.vue';
-import PettyCashRequestModal from '~/components/float/PettyCashRequestModal.vue';
-import { useFloatStore } from '~/stores/useFloatStore';
-import type { PettyCashSummary as PettyCashRequest, RequestStatus } from '~/types/float';
-import { floatAmount, floatStatus } from '~/utils/floatStatus';
+import PettyCashStats from '~/components/petty-cash/PettyCashStats.vue';
+import ListRow, { type ListCell } from '~/components/petty-cash/ListRow.vue';
+import ListTable, { type ListColumn } from '~/components/petty-cash/ListTable.vue';
+import PettyCashRequestModal from '~/components/petty-cash/PettyCashRequestModal.vue';
+import { usePettyCashStore } from '~/stores/usePettyCashStore';
+import type { PettyCashSummary as PettyCashRequest, RequestStatus } from '~/types/pettyCash';
+import { pettyCashAmount, pettyCashStatus } from '~/utils/pettyCashStatus';
 
 definePageMeta({
   layout: 'main',
@@ -149,7 +149,7 @@ useHead({
 });
 
 const router = useRouter();
-const store = useFloatStore();
+const store = usePettyCashStore();
 const { showToast } = useToastify();
 
 const INACTIVE: RequestStatus[] = ['closed', 'rejected', 'cancelled'];
@@ -163,7 +163,7 @@ const myActiveRequests = computed(() =>
 async function handleConfirmReceived(req: PettyCashRequest) {
   try {
     await store.collectCash(req.id);
-    showToast(`Receipt of MVR ${formatMoney(floatAmount(req))} confirmed`, 'success');
+    showToast(`Receipt of MVR ${formatMoney(pettyCashAmount(req))} confirmed`, 'success');
   } catch (err) {
     showToast(err instanceof Error ? err.message : 'Could not complete this action.', 'error');
   }
@@ -199,11 +199,11 @@ function cells(item: PettyCashRequest): ListCell[] {
     { text: item.id, to: `/requests/${item.id}` },
     { text: item.purpose, wrap: true },
     {
-      text: formatMoney(floatAmount(item)),
+      text: formatMoney(pettyCashAmount(item)),
       align: 'right',
       class: 'tabular-nums font-semibold text-slate-900',
     },
-    { status: floatStatus(item.status) },
+    { status: pettyCashStatus(item.status) },
   ];
 }
 </script>

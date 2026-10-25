@@ -73,9 +73,20 @@
               :status="item.difference === 0 ? undefined : countStatus(item.status)"
               :cells="cells(item)"
             >
-              <template v-if="item.status === 'discrepancy_pending'" #actions>
+              <template #actions>
                 <PoButton
-                  v-if="store.currentUser.capabilities.resolveCount"
+                  size="sm"
+                  action-type="ghost"
+                  label="PDF"
+                  :icon="ArrowDownTrayIcon"
+                  :disabled="downloadingCountId !== null"
+                  @button-click="handleDownloadCount(item)"
+                />
+                <PoButton
+                  v-if="
+                    item.status === 'discrepancy_pending' &&
+                    store.currentUser.capabilities.resolveCount
+                  "
                   size="sm"
                   action-type="ghost"
                   label="Resolve"
@@ -411,8 +422,8 @@
 </template>
 
 <script setup lang="ts">
-import PageSkeleton from '~/components/float/PageSkeleton.vue';
-import { formatDate, formatMoney } from '~/utils/floatFormat';
+import PageSkeleton from '~/components/petty-cash/PageSkeleton.vue';
+import { formatDate, formatMoney } from '~/utils/pettyCashFormat';
 
 import { computed, reactive, ref } from 'vue';
 import {
@@ -439,17 +450,17 @@ import {
   PoTypography,
   useToastify,
 } from '@pension/ui-kit';
-import ListRow, { type ListCell } from '~/components/float/ListRow.vue';
-import ListTable, { type ListColumn } from '~/components/float/ListTable.vue';
-import { useFloatStore } from '~/stores/useFloatStore';
-import type { DailyReconciliation } from '~/types/float';
+import ListRow, { type ListCell } from '~/components/petty-cash/ListRow.vue';
+import ListTable, { type ListColumn } from '~/components/petty-cash/ListTable.vue';
+import { usePettyCashStore } from '~/stores/usePettyCashStore';
+import type { DailyReconciliation } from '~/types/pettyCash';
 import {
-  FLOAT_DENOMINATIONS,
+  PETTY_CASH_DENOMINATIONS,
   cashDifference,
   emptyDenominationCounts,
   denominationTotal,
-} from '~/utils/floatStatus';
-import { downloadReconciliationReport } from '~/utils/floatPdf';
+} from '~/utils/pettyCashStatus';
+import { downloadReconciliationReport, downloadVaultCountPdf } from '~/utils/pettyCashPdf';
 
 definePageMeta({
   layout: 'main',
@@ -459,7 +470,7 @@ useHead({
   title: 'Vault Reconciliation — Petty Cash',
 });
 
-const store = useFloatStore();
+const store = usePettyCashStore();
 const { showToast } = useToastify();
 
 async function changeCountPage(page: number) {
@@ -476,11 +487,11 @@ const showRareCoins = ref(false);
 const notes = ref('');
 
 const denomCounts = reactive(emptyDenominationCounts());
-const banknoteDenominations = FLOAT_DENOMINATIONS.filter((d) => d.key.startsWith('note'));
-const coinDenominations = FLOAT_DENOMINATIONS.filter(
+const banknoteDenominations = PETTY_CASH_DENOMINATIONS.filter((d) => d.key.startsWith('note'));
+const coinDenominations = PETTY_CASH_DENOMINATIONS.filter(
   (d) => d.key.startsWith('coin') && d.value >= 1,
 );
-const rareCoinDenominations = FLOAT_DENOMINATIONS.filter((d) => d.value < 1);
+const rareCoinDenominations = PETTY_CASH_DENOMINATIONS.filter((d) => d.value < 1);
 
 const totalBanknotes = computed(() => {
   return (
@@ -508,14 +519,14 @@ const totalRareCoins = computed(() => {
 
 const submittedCounts = computed(() =>
   Object.fromEntries(
-    FLOAT_DENOMINATIONS.map((d) => [
+    PETTY_CASH_DENOMINATIONS.map((d) => [
       d.key,
       d.value < 1 && !showRareCoins.value ? 0 : Number(denomCounts[d.key]) || 0,
     ]),
   ),
 );
 const hasCountEntry = computed(() =>
-  FLOAT_DENOMINATIONS.some(
+  PETTY_CASH_DENOMINATIONS.some(
     (d) => (d.value >= 1 || showRareCoins.value) && denomCounts[d.key] !== '',
   ),
 );
@@ -631,7 +642,7 @@ const columns: ListColumn[] = [
   { label: 'Counted', width: '7rem', align: 'right' },
   { label: 'Difference', width: '7rem', align: 'right' },
   { label: 'Status', width: '7.5rem' },
-  { label: 'Action', width: '6rem', actions: true },
+  { label: 'Action', width: '10rem', actions: true },
 ];
 
 function cells(item: DailyReconciliation): ListCell[] {
@@ -668,6 +679,24 @@ async function handleGenerateReport() {
     showToast(err instanceof Error ? err.message : 'Could not generate the report.', 'error');
   } finally {
     isGenerating.value = false;
+  }
+}
+
+// Single count PDF from the row already in the list
+const downloadingCountId = ref<string | null>(null);
+
+async function handleDownloadCount(item: DailyReconciliation) {
+  downloadingCountId.value = item.id;
+  try {
+    await downloadVaultCountPdf({
+      count: item,
+      fundName: store.fund.name || 'Petty Cash',
+      preparedBy: store.currentUser.name,
+    });
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : 'Could not download the count PDF.', 'error');
+  } finally {
+    downloadingCountId.value = null;
   }
 }
 </script>

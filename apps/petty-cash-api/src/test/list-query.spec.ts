@@ -5,6 +5,9 @@ import { RequestRecordsService } from '../common/request-records.service';
 import { dateFilter } from '../common/dates';
 import { pageQuery } from '../common/pagination';
 import { ApprovalsService } from '../approvals/approvals.service';
+import { CreateSchema } from '../requests/dto/create.dto';
+import { EditSchema } from '../requests/dto/edit.dto';
+import { RequestsService } from '../requests/requests.service';
 import { DisbursementsService } from '../disbursements/disbursements.service';
 import { FundService } from '../fund/fund.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -24,7 +27,7 @@ function setup() {
     count: jest.fn<Promise<number>, [unknown?]>().mockResolvedValue(25),
   });
   const db = {
-    floatRequest: delegate<Prisma.FloatRequestFindManyArgs>(),
+    pettyCashRequest: delegate<Prisma.PettyCashRequestFindManyArgs>(),
     fundTransaction: delegate<Prisma.FundTransactionFindManyArgs>(),
     notification: delegate<Prisma.NotificationFindManyArgs>(),
     vaultCount: delegate<Prisma.VaultCountFindManyArgs>(),
@@ -49,7 +52,7 @@ describe('list pagination and filters', () => {
       },
       actor,
     );
-    const query = db.floatRequest.findMany.mock.calls[0][0];
+    const query = db.pettyCashRequest.findMany.mock.calls[0][0];
     expect(query).toMatchObject({
       skip: 20,
       take: 10,
@@ -62,14 +65,74 @@ describe('list pagination and filters', () => {
       { dynamicsReference: { contains: 'Paper & pens' } },
       { requester: { path: '$.name', string_contains: 'Paper & pens' } },
     ]);
-    expect(db.floatRequest.count).toHaveBeenCalledWith({ where: query.where });
+    expect(db.pettyCashRequest.count).toHaveBeenCalledWith({ where: query.where });
     expect(result).toMatchObject({ total: 25, page: 3, pageSize: 10 });
   });
 
   test('cleared or whitespace-only search removes text filtering', async () => {
     const { db, prisma } = setup();
     await new RequestRecordsService(prisma).list({ q: '   ' }, actor);
-    expect(db.floatRequest.findMany.mock.calls[0][0].where?.OR).toBeUndefined();
+    expect(db.pettyCashRequest.findMany.mock.calls[0][0].where?.OR).toBeUndefined();
+  });
+
+  test.each(['list', 'history'] as const)(
+    "Requests %s only returns the caller's own requests",
+    async (method) => {
+      const records = { list: jest.fn() };
+      const service = new RequestsService(
+        null!,
+        records as unknown as RequestRecordsService,
+        null!,
+        null!,
+        null!,
+        null!,
+      );
+      await service[method]({ requesterId: 'someone-else', mine: 'false', page: '2' }, actor);
+      expect(records.list).toHaveBeenCalledWith(
+        expect.objectContaining({ mine: 'true', requesterId: undefined, page: '2' }),
+        actor,
+      );
+    },
+  );
+
+  test.each([
+    ['requester', [], 'requester', 200],
+    ['someone-else', [], 'requester', 403],
+    ['someone-else', ['approvals.list'], 'requester', 200],
+    ['someone-else', ['disbursements.list'], 'requester', 200],
+  ] as const)(
+    'request detail owned by %s with %j for %s returns %s',
+    async (owner, permissions, viewer, status) => {
+      const db = {
+        pettyCashRequest: { findUnique: jest.fn().mockResolvedValue({ requesterId: owner }) },
+      };
+      const records = { get: jest.fn().mockResolvedValue({ id: 'PC-2026-0001' }) };
+      const service = new RequestsService(
+        db as unknown as PrismaService,
+        records as unknown as RequestRecordsService,
+        null!,
+        null!,
+        null!,
+        null!,
+      );
+      const call = service.get('PC-2026-0001', {
+        ...actor,
+        id: viewer,
+        permissions: [...permissions],
+      });
+      if (status === 200) await expect(call).resolves.toEqual({ id: 'PC-2026-0001' });
+      else await expect(call).rejects.toMatchObject({ status: 403 });
+    },
+  );
+
+  test('requested petty cash is capped at MVR 5,000', () => {
+    const base = { purpose: 'Supplies', neededBy: '2999-01-01' };
+    expect(CreateSchema.safeParse({ ...base, requestedAmount: 5000 }).success).toBe(true);
+    expect(CreateSchema.safeParse({ ...base, requestedAmount: 5000.01 }).success).toBe(false);
+    expect(EditSchema.safeParse({ requestedAmount: 5001, expectedVersion: 1 }).success).toBe(false);
+    expect(EditSchema.safeParse({ requestedAmount: 4999.99, expectedVersion: 1 }).success).toBe(
+      true,
+    );
   });
 
   test('approvals always constrain the list to pending approval', async () => {

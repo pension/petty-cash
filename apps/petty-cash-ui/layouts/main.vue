@@ -19,7 +19,7 @@
         @on-mark-as-read-click="markVisibleRead"
       >
         <template #appIcon
-          ><img src="/images/appicons/float.svg" alt="Petty Cash" class="w-8 h-8"
+          ><img src="/images/appicons/petty-cash.svg" alt="Petty Cash" class="w-8 h-8"
         /></template>
       </PoTopBar>
       <PoOrgSelector
@@ -67,13 +67,13 @@ import {
   PoMessage,
   PoButton,
 } from '@pension/ui-kit';
-import PageSkeleton from '~/components/float/PageSkeleton.vue';
+import PageSkeleton from '~/components/petty-cash/PageSkeleton.vue';
 import allNavigation from '~/config/navigation';
-import { useFloatStore } from '~/stores/useFloatStore';
+import { usePettyCashStore } from '~/stores/usePettyCashStore';
 const route = useRoute(),
   router = useRouter(),
   identity = useIdentity(),
-  store = useFloatStore();
+  store = usePettyCashStore();
 const renderPage = computed(
   () =>
     !!identity.user?.value?.transacting_as &&

@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { z } from 'zod';
+import { MAX_REQUEST_AMOUNT } from './constants';
 import { today } from './dates';
 import { money } from './money';
 export const amount = z
@@ -8,6 +9,10 @@ export const amount = z
   .positive()
   .max(999999999999.99)
   .refine((n) => money(n).decimalPlaces() <= 2, 'Use at most two decimal places');
+export const requestAmount = amount.refine(
+  (n) => n <= MAX_REQUEST_AMOUNT,
+  `Requested petty cash cannot exceed MVR ${MAX_REQUEST_AMOUNT.toLocaleString('en-US')}`,
+);
 export const date = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)

@@ -12,9 +12,9 @@ import { NotificationWriterService } from './notification-writer.service';
 import { ACTION_STATES, allowedActions } from './request-policy';
 import { RequestRecordsService, requestDetail } from './request-records.service';
 import { TransactionsService } from './transactions.service';
-export type LockedRequest = Prisma.FloatRequestGetPayload<{ include: typeof requestDetail }>;
+export type LockedRequest = Prisma.PettyCashRequestGetPayload<{ include: typeof requestDetail }>;
 export type RequestChange = {
-  update: Prisma.FloatRequestUpdateInput;
+  update: Prisma.PettyCashRequestUpdateInput;
   type: string;
   title: string;
   description: string;
@@ -41,7 +41,7 @@ export class RequestWorkflowService {
   ) {
     const operation = async (tx: Prisma.TransactionClient) => {
       await tx.$queryRaw`SELECT id FROM requests WHERE id = ${id} FOR UPDATE`;
-      const request = await tx.floatRequest.findUnique({ where: { id }, include: requestDetail });
+      const request = await tx.pettyCashRequest.findUnique({ where: { id }, include: requestDetail });
       if (!request) throw new NotFoundException('Request not found.');
       if (!ACTION_STATES[action].includes(request.status))
         throw new ConflictException(
@@ -54,7 +54,7 @@ export class RequestWorkflowService {
       const result = await change(tx, request);
       if (!result) return this.records.get(id, actor, tx);
       const { update, type, title, description } = result;
-      await tx.floatRequest.update({
+      await tx.pettyCashRequest.update({
         where: { id },
         data: { ...update, version: { increment: 1 } },
       });

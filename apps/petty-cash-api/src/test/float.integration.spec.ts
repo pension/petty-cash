@@ -580,9 +580,14 @@ integration('Float MySQL financial workflow', () => {
     await expect(
       fund.topUp({ amount: 4000, reference: 'TEST' }, finance, key),
     ).rejects.toMatchObject({ status: 409 });
-    const r = await create(999999);
+    const r = await create(5000);
     await transition(r.id, 'authorize', {}, manager);
-    await transition(r.id, 'notifyCollection', { amount: 999999 }, finance);
+    await transition(
+      r.id,
+      'notifyCollection',
+      { amount: 999999, reason: 'Exceeds vault cash' },
+      finance,
+    );
     await expect(transition(r.id, 'confirmReceipt', {}, gs, randomUUID())).rejects.toMatchObject({
       status: 409,
     });
@@ -679,7 +684,7 @@ integration('Float MySQL financial workflow', () => {
   test('history search, report completeness, ledger invariant and role inbox isolation', async () => {
     const history = await requests.list(
       { status: 'closed', q: 'TEST-DYN', sort: 'closedAt' },
-      finance,
+      gs,
     );
     expect(history.total).toBeGreaterThan(0);
     expect(history.data.every((r) => r.status === 'closed')).toBe(true);

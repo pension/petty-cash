@@ -11,7 +11,7 @@ runInNewContext(ts.transpileModule(readFileSync(new URL('../utils/staffEligibili
 }).outputText, { exports: eligibilityModule, Set });
 
 
-const source = readFileSync(new URL('../stores/useFloatStore.ts', import.meta.url), 'utf8');
+const source = readFileSync(new URL('../stores/usePettyCashStore.ts', import.meta.url), 'utf8');
 const code = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
@@ -40,7 +40,7 @@ function setup(handler) {
       return handler(path, options);
     },
   });
-  return { store: exports.useFloatStore(pinia.createPinia()), calls };
+  return { store: exports.usePettyCashStore(pinia.createPinia()), calls };
 }
 const ok = (data = {}) => ({ success: true, data });
 const failure = (status) => ({ success: false, status, error: { message: 'Temporary failure' } });

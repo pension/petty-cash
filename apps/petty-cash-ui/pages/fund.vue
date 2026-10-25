@@ -135,8 +135,8 @@
 </template>
 
 <script setup lang="ts">
-import PageSkeleton from '~/components/float/PageSkeleton.vue';
-import { formatDate, formatMoney } from '~/utils/floatFormat';
+import PageSkeleton from '~/components/petty-cash/PageSkeleton.vue';
+import { formatDate, formatMoney } from '~/utils/pettyCashFormat';
 
 import { computed, reactive, ref } from 'vue';
 import { BanknotesIcon, CalendarDaysIcon, PlusIcon, UserGroupIcon } from '@heroicons/vue/20/solid';
@@ -153,10 +153,10 @@ import {
   PoTypography,
   useToastify,
 } from '@pension/ui-kit';
-import ListRow, { type ListCell } from '~/components/float/ListRow.vue';
-import ListTable, { type ListColumn } from '~/components/float/ListTable.vue';
-import type { FundTransaction } from '~/types/float';
-import { useFloatStore } from '~/stores/useFloatStore';
+import ListRow, { type ListCell } from '~/components/petty-cash/ListRow.vue';
+import ListTable, { type ListColumn } from '~/components/petty-cash/ListTable.vue';
+import type { FundTransaction } from '~/types/pettyCash';
+import { usePettyCashStore } from '~/stores/usePettyCashStore';
 
 definePageMeta({
   layout: 'main',
@@ -166,7 +166,7 @@ useHead({
   title: 'Fund Ledger — Petty Cash',
 });
 
-const store = useFloatStore();
+const store = usePettyCashStore();
 const { showToast } = useToastify();
 
 const showTopUpModal = ref(false);

@@ -609,19 +609,19 @@
 </template>
 
 <script setup lang="ts">
-import PageSkeleton from '~/components/float/PageSkeleton.vue';
-import { cashDifference, cashSum, denominationTotal, emptyDenominationCounts  } from '~/utils/floatStatus';
-import { formatDate, formatMoney } from '~/utils/floatFormat';
+import PageSkeleton from '~/components/petty-cash/PageSkeleton.vue';
+import { cashDifference, cashSum, denominationTotal, emptyDenominationCounts  } from '~/utils/pettyCashStatus';
+import { formatDate, formatMoney } from '~/utils/pettyCashFormat';
 
 import { computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import BackButton from '~/components/backButton.vue';
-import BanknoteCounter from '~/components/float/BanknoteCounter.vue';
-import NotifyCollectionModal from '~/components/float/NotifyCollectionModal.vue';
-import PettyCashRequestModal from '~/components/float/PettyCashRequestModal.vue';
-import BulkReceiptsModal from '~/components/float/BulkReceiptsModal.vue';
-import ReceiptScanModal from '~/components/float/ReceiptScanModal.vue';
-import ReceiptAttachmentPreview from '~/components/float/ReceiptAttachmentPreview.vue';
+import BanknoteCounter from '~/components/petty-cash/BanknoteCounter.vue';
+import NotifyCollectionModal from '~/components/petty-cash/NotifyCollectionModal.vue';
+import PettyCashRequestModal from '~/components/petty-cash/PettyCashRequestModal.vue';
+import BulkReceiptsModal from '~/components/petty-cash/BulkReceiptsModal.vue';
+import ReceiptScanModal from '~/components/petty-cash/ReceiptScanModal.vue';
+import ReceiptAttachmentPreview from '~/components/petty-cash/ReceiptAttachmentPreview.vue';
 import {
   ArchiveBoxIcon,
   ArrowDownTrayIcon,
@@ -659,16 +659,16 @@ import {
   PoTypography,
   useToastify,
 } from '@pension/ui-kit';
-import { useFloatStore } from '~/stores/useFloatStore';
-import type { ExpenseItem } from '~/types/float';
-import { downloadRequestPdf } from '~/utils/floatPdf';
+import { usePettyCashStore } from '~/stores/usePettyCashStore';
+import type { ExpenseItem } from '~/types/pettyCash';
+import { downloadRequestPdf } from '~/utils/pettyCashPdf';
 
 definePageMeta({
   layout: 'main',
 });
 
 const route = useRoute();
-const store = useFloatStore();
+const store = usePettyCashStore();
 const { showToast } = useToastify();
 
 const requestId = computed(() => route.params.id as string);

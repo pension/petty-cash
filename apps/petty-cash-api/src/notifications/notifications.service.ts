@@ -19,7 +19,7 @@ export class NotificationsService {
   async sendReminder(id: string, body: unknown, a: Actor) {
     const d = parse(SendReminderSchema, body);
     return this.workflow.run(id, 'sendReminder', d, a, (_tx, r) => {
-      const update: Prisma.FloatRequestUpdateInput = {};
+      const update: Prisma.PettyCashRequestUpdateInput = {};
       if (r.lastReminderAt && Date.now() - r.lastReminderAt.getTime() < 86400000)
         throw new ConflictException(
           `A reminder was already sent at ${r.lastReminderAt.toISOString()}. Please wait 24 hours.`,

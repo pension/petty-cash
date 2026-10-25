@@ -1,6 +1,6 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { Actor } from '../auth/actor';
+import { can, type Actor } from '../auth/actor';
 import { AuditService } from '../common/audit.service';
 import { FUND_ID } from '../common/constants';
 import { today } from '../common/dates';
@@ -27,7 +27,7 @@ export class RequestsService {
   async edit(id: string, body: unknown, a: Actor) {
     const d = parse(EditSchema, body);
     return this.workflow.run(id, 'edit', d, a, (_tx, r) => {
-      const update: Prisma.FloatRequestUpdateInput = {};
+      const update: Prisma.PettyCashRequestUpdateInput = {};
       const changes: string[] = [];
       if (d.purpose !== undefined && d.purpose !== r.purpose) {
         update.purpose = d.purpose;
@@ -64,7 +64,7 @@ export class RequestsService {
         update: { value: { increment: 1 } },
       });
       const id = `PC-${year}-${String(counter.value).padStart(4, '0')}`;
-      await tx.floatRequest.create({
+      await tx.pettyCashRequest.create({
         data: {
           id,
           fundId: FUND_ID,
@@ -101,13 +101,27 @@ export class RequestsService {
       return this.records.get(id, a, tx);
     });
   }
-  get(id: string, a: Actor) {
+  // For now a request is visible to its creator, plus GS approvers and Finance, who need
+  // the detail page to authorize, prepare cash and finalize.
+  async get(id: string, a: Actor) {
+    const r = await this.db.pettyCashRequest.findUnique({
+      where: { id },
+      select: { requesterId: true },
+    });
+    if (!r) throw new NotFoundException('Request not found.');
+    if (r.requesterId !== a.id && !can(a, 'approvals.list') && !can(a, 'disbursements.list'))
+      throw new ForbiddenException('You can only view petty cash requests you created.');
     return this.records.get(id, a);
   }
+  // Requests and History list only the caller's own requests. GS Approvals and the
+  // Finance Desk use their own endpoints, which list every requester's requests.
   history(q: ListQuery, a: Actor) {
-    return this.records.list({ ...q, status: 'closed', sort: 'closedAt' }, a);
+    return this.records.list(
+      { ...q, requesterId: undefined, mine: 'true', status: 'closed', sort: 'closedAt' },
+      a,
+    );
   }
   list(q: ListQuery, a: Actor) {
-    return this.records.list(q, a);
+    return this.records.list({ ...q, requesterId: undefined, mine: 'true' }, a);
   }
 }

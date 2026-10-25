@@ -32,7 +32,7 @@ export class DisbursementsService {
   async notifyCollection(id: string, body: unknown, a: Actor) {
     const d = parse(NotifyCollectionSchema, body);
     return this.workflow.run(id, 'notifyCollection', d, a, (_tx, r) => {
-      const update: Prisma.FloatRequestUpdateInput = {};
+      const update: Prisma.PettyCashRequestUpdateInput = {};
       if (!r.requestedAmount.equals(d.amount) && !d.reason)
         throw new BadRequestException({
           message: 'A reason is required when changing the amount.',
@@ -57,7 +57,7 @@ export class DisbursementsService {
       d,
       a,
       async (tx, r) => {
-        const update: Prisma.FloatRequestUpdateInput = {};
+        const update: Prisma.PettyCashRequestUpdateInput = {};
         await tx.cashIssuance.create({
           data: {
             requestId: id,

@@ -31,7 +31,7 @@ yarn lint
 yarn workspace petty-cash-api test --runInBand
 ```
 
-Set `FLOAT_TEST_DATABASE_URL=mysql://.../float_test` for database integration tests. Use a dedicated test database; tests append activity and must never target production. Apply the same migrations to it first. Tests cover cash paths, audit immutability, concurrency, idempotency, every endpoint’s MPAO boundary, streamed bytes, bounded buffering, upload failure cleanup and retention of receipt evidence.
+Set `PETTY_CASH_TEST_DATABASE_URL=mysql://.../petty_cash_test` for database integration tests. Use a dedicated test database; tests append activity and must never target production. Apply the same migrations to it first. Tests cover cash paths, audit immutability, concurrency, idempotency, every endpoint’s MPAO boundary, streamed bytes, bounded buffering, upload failure cleanup and retention of receipt evidence.
 
 ## Media storage
 
@@ -62,7 +62,7 @@ Verify proxy/load-balancer request buffering is disabled for multipart traffic a
 
 Set server-side `GEMINI_API_KEY` to enable Google AI receipt extraction; optional `GEMINI_RECEIPT_MODEL` defaults to `gemini-3.5-flash-lite`. After upload, a progress state appears while AI checks the document and extracts vendor/date/total/invoice/item details; the editable form opens afterwards. Multiple items fill “What was bought” separated by commas. Non-bill documents or AI failures show a message and open manual entry; they never block subsequent processing. See [receipt extraction](docs/RECEIPT_AI.md). Dynamics references are entered manually. Email delivery is not enabled.
 
-See [AGENTS.md](AGENTS.md), [backend PRD](docs/FLOAT_BACKEND_PRD.md), and [implementation checklist](docs/IMPLEMENTATION.md).
+See [AGENTS.md](AGENTS.md), [backend PRD](docs/PETTY_CASH_BACKEND_PRD.md), and [implementation checklist](docs/IMPLEMENTATION.md).
 
 ## API structure and configuration changes
 

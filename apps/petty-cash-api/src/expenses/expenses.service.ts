@@ -68,7 +68,7 @@ export class ExpensesService {
   async removeExpense(id: string, body: unknown, a: Actor, expenseId: string) {
     const d = parse(RemoveExpenseSchema, body);
     return this.workflow.run(id, 'removeExpense', d, a, async (tx) => {
-      const update: Prisma.FloatRequestUpdateInput = {};
+      const update: Prisma.PettyCashRequestUpdateInput = {};
       const result = await tx.expense.updateMany({
         where: { id: expenseId, requestId: id, removedAt: null },
         data: { removedAt: new Date(), removedBy: a.id },

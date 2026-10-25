@@ -52,7 +52,7 @@
                 .filter(Boolean)
                 .join(' · ')
             "
-            :amount="formatMoney(floatAmount(item))"
+            :amount="formatMoney(pettyCashAmount(item))"
           >
             <template #actions>
               <PoButton
@@ -91,8 +91,8 @@
 </template>
 
 <script setup lang="ts">
-import PageSkeleton from '~/components/float/PageSkeleton.vue';
-import { formatDate, formatMoney } from '~/utils/floatFormat';
+import PageSkeleton from '~/components/petty-cash/PageSkeleton.vue';
+import { formatDate, formatMoney } from '~/utils/pettyCashFormat';
 
 import { computed, ref, watch } from 'vue';
 import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
@@ -106,12 +106,12 @@ import {
   PoSearch,
   useToastify,
 } from '@pension/ui-kit';
-import ListRow, { type ListCell } from '~/components/float/ListRow.vue';
-import ListTable, { type ListColumn } from '~/components/float/ListTable.vue';
-import { useFloatStore } from '~/stores/useFloatStore';
-import type { PettyCashSummary as PettyCashRequest } from '~/types/float';
-import { downloadRequestPdf } from '~/utils/floatPdf';
-import { floatAmount } from '~/utils/floatStatus';
+import ListRow, { type ListCell } from '~/components/petty-cash/ListRow.vue';
+import ListTable, { type ListColumn } from '~/components/petty-cash/ListTable.vue';
+import { usePettyCashStore } from '~/stores/usePettyCashStore';
+import type { PettyCashSummary as PettyCashRequest } from '~/types/pettyCash';
+import { downloadRequestPdf } from '~/utils/pettyCashPdf';
+import { pettyCashAmount } from '~/utils/pettyCashStatus';
 
 definePageMeta({
   layout: 'main',
@@ -121,7 +121,7 @@ useHead({
   title: 'Petty Cash — History',
 });
 
-const store = useFloatStore();
+const store = usePettyCashStore();
 const { showToast } = useToastify();
 
 const searchQuery = ref(String(store.requestQuery.q || ''));
@@ -181,7 +181,7 @@ function cells(item: PettyCashRequest): ListCell[] {
     { text: item.id, to: `/requests/${item.id}` },
     { text: item.purpose, wrap: true },
     {
-      text: formatMoney(floatAmount(item)),
+      text: formatMoney(pettyCashAmount(item)),
       align: 'right',
       class: 'tabular-nums font-semibold text-slate-900',
     },

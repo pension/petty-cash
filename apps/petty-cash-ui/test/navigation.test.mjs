@@ -11,7 +11,7 @@ runInNewContext(ts.transpileModule(readFileSync(new URL('../utils/staffEligibili
 }).outputText, { exports: eligibilityModule, Set });
 
 
-const code = ts.transpileModule(readFileSync(new URL('../stores/useFloatStore.ts', import.meta.url), 'utf8'), {
+const code = ts.transpileModule(readFileSync(new URL('../stores/usePettyCashStore.ts', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 const allCapabilities = Object.fromEntries(['viewRequests', 'viewRequest', 'viewApprovals', 'viewFinance', 'viewHistory',
@@ -42,7 +42,7 @@ function setup({ capabilities = allCapabilities, handler } = {}) {
       return ok(page);
     },
   });
-  return { store: exports.useFloatStore(pinia.createPinia()), calls, advance: ms => { now += ms; }, user };
+  return { store: exports.usePettyCashStore(pinia.createPinia()), calls, advance: ms => { now += ms; }, user };
 }
 
 test('overlapping initial loads share access, notifications, stats and list requests', async () => {

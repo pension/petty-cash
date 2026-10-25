@@ -1,5 +1,5 @@
 import { PDFDocument, PageSizes, rgb } from 'pdf-lib';
-import type { ExpenseItem } from '~/types/float';
+import type { ExpenseItem } from '~/types/pettyCash';
 
 async function imagePng(blob: Blob): Promise<ArrayBuffer> {
   const url = URL.createObjectURL(blob);

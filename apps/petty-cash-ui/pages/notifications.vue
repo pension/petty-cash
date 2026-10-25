@@ -34,7 +34,7 @@
   ></PoContentArea>
 </template>
 <script setup lang="ts">
-import PageSkeleton from '~/components/float/PageSkeleton.vue';
+import PageSkeleton from '~/components/petty-cash/PageSkeleton.vue';
 import {
   PoContentArea,
   PoPageTitle,
@@ -44,9 +44,9 @@ import {
   PoEmpty,
   useToastify,
 } from '@pension/ui-kit';
-import { useFloatStore } from '~/stores/useFloatStore';
+import { usePettyCashStore } from '~/stores/usePettyCashStore';
 definePageMeta({ layout: 'main' });
-const store = useFloatStore(),
+const store = usePettyCashStore(),
   router = useRouter(),
   page = computed(() => store.notificationPage);
 const { showToast } = useToastify();

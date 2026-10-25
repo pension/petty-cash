@@ -30,12 +30,12 @@
 </template>
 
 <script setup lang="ts">
-import PageSkeleton from '~/components/float/PageSkeleton.vue';
+import PageSkeleton from '~/components/petty-cash/PageSkeleton.vue';
 import { PoContentArea, PoPageTitle } from '@pension/ui-kit';
-import { useFloatStore } from '~/stores/useFloatStore';
-import StaffAssignmentSection from '~/components/float/StaffAssignmentSection.vue';
+import { usePettyCashStore } from '~/stores/usePettyCashStore';
+import StaffAssignmentSection from '~/components/petty-cash/StaffAssignmentSection.vue';
 
-const store = useFloatStore();
+const store = usePettyCashStore();
 
 definePageMeta({
   layout: 'main',

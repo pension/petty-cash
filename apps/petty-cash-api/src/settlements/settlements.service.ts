@@ -20,7 +20,7 @@ export class SettlementsService {
   async settle(id: string, body: unknown, a: Actor) {
     const d = parse(SettleSchema, body);
     return this.workflow.run(id, 'settle', d, a, (_tx, r) => {
-      const update: Prisma.FloatRequestUpdateInput = {};
+      const update: Prisma.PettyCashRequestUpdateInput = {};
       const declared = Prisma.Decimal.max(
         0,
         r.totalCashIssued.sub(r.expenses.reduce((sum, e) => sum.add(e.amount), money(0))),
@@ -37,7 +37,7 @@ export class SettlementsService {
   async returnForCorrection(id: string, body: unknown, a: Actor) {
     const d = parse(ReturnForCorrectionSchema, body);
     return this.workflow.run(id, 'returnForCorrection', d, a, () => {
-      const update: Prisma.FloatRequestUpdateInput = {};
+      const update: Prisma.PettyCashRequestUpdateInput = {};
       update.status = 'returned_for_correction';
       update.correctionNote = d.note;
       const type = 'expense_returned';
@@ -54,7 +54,7 @@ export class SettlementsService {
       d,
       a,
       async (tx, r) => {
-        const update: Prisma.FloatRequestUpdateInput = {};
+        const update: Prisma.PettyCashRequestUpdateInput = {};
         const spent = r.expenses.reduce((sum, e) => sum.add(e.amount), money(0));
         const balance = r.totalCashIssued.sub(spent);
         const reference = d.dynamicsReference || id;

@@ -4,7 +4,7 @@ import {
   type CashIssuance,
   type CashReturn,
   type Expense,
-  type FloatRequest,
+  type PettyCashRequest,
   type ReceiptFile,
   type TimelineEvent,
 } from '@prisma/client';
@@ -15,7 +15,7 @@ import { pageQuery, type ListQuery } from './pagination';
 import { allowedActions } from './request-policy';
 import { wire } from './serialization';
 import { parse } from './validation';
-export type RequestRecord = FloatRequest & {
+export type RequestRecord = PettyCashRequest & {
   expenses?: (Expense & { file?: ReceiptFile | null })[];
   issuances?: CashIssuance[];
   returns?: CashReturn[];
@@ -63,7 +63,7 @@ export class RequestRecordsService {
     });
   }
   async get(id: string, a: Actor, tx: Prisma.TransactionClient = this.db) {
-    const r = await tx.floatRequest.findUnique({
+    const r = await tx.pettyCashRequest.findUnique({
       where: { id },
       include: requestDetail,
     });
@@ -74,7 +74,7 @@ export class RequestRecordsService {
     const { page, pageSize } = parse(pageQuery, q);
     const search = q.q?.trim();
     const statuses = q.status?.split(',');
-    const where: Prisma.FloatRequestWhereInput = {
+    const where: Prisma.PettyCashRequestWhereInput = {
       ...(statuses ? { status: { in: statuses } } : {}),
       ...(q.mine === 'true'
         ? { requesterId: a.id }
@@ -95,14 +95,14 @@ export class RequestRecordsService {
     const sort = q.sort === 'closedAt' ? 'closedAt' : 'createdAt';
     const order = q.order === 'asc' ? 'asc' : 'desc';
     const [rows, total] = await this.db.$transaction([
-      this.db.floatRequest.findMany({
+      this.db.pettyCashRequest.findMany({
         where,
         orderBy: [{ [sort]: order }, { id: order }],
         skip: (page - 1) * pageSize,
         take: pageSize,
         include: { expenses: { where: { removedAt: null } } },
       }),
-      this.db.floatRequest.count({ where }),
+      this.db.pettyCashRequest.count({ where }),
     ]);
     return {
       data: rows.map((r) => {
