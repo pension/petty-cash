@@ -111,6 +111,16 @@ export interface CashReturn {
   acknowledged: boolean;
 }
 
+export interface CashHandover {
+  id: string;
+  fromEmployeeId: number;
+  fromName: string;
+  toEmployeeId: number;
+  toName: string;
+  note?: string;
+  acceptedAt: string;
+}
+
 export interface ClosingDateExtension {
   originalDate: string;
   newDate: string;
@@ -149,10 +159,15 @@ export interface PettyCashRequest {
   closureNotes?: string;
   closedBy?: string;
   closedAt?: string;
+  custodianEmployeeId?: number;
+  custodianName?: string;
+  pendingCustodianEmployeeId?: number;
+  pendingCustodianName?: string;
   issuances: CashIssuance[];
   additionalCashRequests: AdditionalCashRequest[];
   expenses: ExpenseItem[];
   returns: CashReturn[];
+  handovers: CashHandover[];
   timeline: ActivityTimelineItem[];
   createdAt: string;
   updatedAt: string;
@@ -238,5 +253,5 @@ export interface PettyCashNotification {
 
 export type PettyCashSummary = Omit<
   PettyCashRequest,
-  'expenses' | 'issuances' | 'returns' | 'timeline'
+  'expenses' | 'issuances' | 'returns' | 'handovers' | 'timeline'
 >;

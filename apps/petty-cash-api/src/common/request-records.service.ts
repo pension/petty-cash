@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   Prisma,
+  type CashHandover,
   type CashIssuance,
   type CashReturn,
   type Expense,
@@ -10,6 +11,7 @@ import {
 } from '@prisma/client';
 import type { Actor } from '../auth/actor';
 import { PrismaService } from '../prisma/prisma.service';
+import { dateFilter } from './dates';
 import { money } from './money';
 import { pageQuery, type ListQuery } from './pagination';
 import { allowedActions } from './request-policy';
@@ -19,12 +21,14 @@ export type RequestRecord = PettyCashRequest & {
   expenses?: (Expense & { file?: ReceiptFile | null })[];
   issuances?: CashIssuance[];
   returns?: CashReturn[];
+  handovers?: CashHandover[];
   timeline?: TimelineEvent[];
 };
 export const requestDetail = {
   expenses: { where: { removedAt: null }, include: { file: true } },
   issuances: true,
   returns: true,
+  handovers: { orderBy: { acceptedAt: 'asc' as const } },
   timeline: { orderBy: { sequence: 'asc' as const } },
 };
 @Injectable()
@@ -81,6 +85,7 @@ export class RequestRecordsService {
         : q.requesterId
           ? { requesterId: q.requesterId }
           : {}),
+      ...dateFilter(q, 'closedAt'),
       ...(search
         ? {
             OR: [
@@ -110,6 +115,7 @@ export class RequestRecordsService {
         delete v.expenses;
         delete v.issuances;
         delete v.returns;
+        delete v.handovers;
         delete v.timeline;
         return v;
       }),

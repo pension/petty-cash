@@ -10,14 +10,14 @@ The API uses Midgard IdentityGuard + PermissionGuard, with EntityGuard restricti
 
 Run [petty-cash-permissions.sql](sql/petty-cash-permissions.sql) against **Bifrost MySQL**, not the Petty Cash database. Verify `@mpao_organisation_id` first; `1` is the local MPAO entity, not a portable production default. Use a client that stops on errors, without `--force`.
 
-The script upserts all 34 permission definitions and two roles:
+The script upserts all 39 permission definitions and two roles:
 
 | Role | Pages | Workflow actions |
 | --- | --- | --- |
-| Petty Cash Request Role | Requests, GS Approvals, History | Create/edit own requests, confirm own cash collection, add/remove receipts (including bulk and optional AI), settle, authorize/reject requests, view history and request details |
+| Petty Cash Request Role | Requests, GS Approvals, History | Create/edit own requests, confirm collection of disbursed cash (any active requester, not just the creator), offer/accept/decline/withdraw a cash custody hand-over to another active requester, add/remove receipts (including bulk and optional AI), settle, authorize/reject requests, view history and request details |
 | Petty Cash Finance Role | Finance Desk, History, Reconciliation, Ledger, Settings | Manage requester/approver staff, prepare/notify collection, send reminders, return settlement for correction, finalize/close, record vault counts, resolve discrepancies with or without adjustment, top-ups, ledger and reconciliation reports |
 
-Both include `requests.get`, `files.download`, `notifications.list`, `notifications.markread` and `statistics.get`. These support details, attachments, notifications and dashboard statistics. The Request role has 18 permissions; Finance has 22. A user assigned both receives the union.
+Both include `requests.get`, `files.download`, `notifications.list`, `notifications.markread` and `statistics.get`. These support details, attachments, notifications and dashboard statistics. The Request role has 23 permissions; Finance has 22. A user assigned both receives the union.
 
 The source templates are `ROLE_PERMISSION_GROUPS` in `apps/petty-cash-api/src/auth/permissions.ts`; tests compare them with SQL memberships. `permissions.json` remains the Bifrost permission-import manifest.
 
@@ -40,7 +40,9 @@ The sidebar and direct page entry require the following permissions, all prefixe
 
 The three new permissions are `approvals.list`, `disbursements.list`, and `requests.history`; Finance now also holds `requests.history`, so Finance sees History alongside Finance Desk. Deploy the updated catalog and role memberships alongside the API/UI changes. Existing action-only permissions do not reveal pages. Request details use `requests.get`; viewing does not grant mutations. Finance users landing on `/` are sent to their first available page, normally Finance Desk. Denied direct links show an access message without loading business data.
 
-Requests, History, GS Approvals and the Finance Desk all list every requester's requests to any actor holding the matching view permission, filtered only by status, not by who created the request; `GET /requests/:id` is limited to the creator and holders of `requests.list`, `requests.history`, `approvals.list` or `disbursements.list`. Approvals reads always filter pending approval; History always filters closed requests. Finance reads accept only the four desk tabs' statuses. Existing mutation URLs are unchanged. API guards enforce view and mutation permissions independently of the UI. Ownership of edit and cash-collection actions is unaffected by list visibility: only the request's creator can edit a pending request or confirm receipt of disbursed cash (see `allowedActions` in `common/request-policy.ts`).
+Requests, History, GS Approvals and the Finance Desk all list every requester's requests to any actor holding the matching view permission, filtered only by status, not by who created the request; `GET /requests/:id` is limited to the creator and holders of `requests.list`, `requests.history`, `approvals.list` or `disbursements.list`. Approvals reads always filter pending approval; History always filters closed requests. Finance reads accept only the four desk tabs' statuses. Existing mutation URLs are unchanged. API guards enforce view and mutation permissions independently of the UI.
+
+Ownership rules differ by stage (see `allowedActions` in `common/request-policy.ts`): only the request's creator can edit a pending request. Confirming collection of disbursed cash (`disbursements.confirmreceipt`) is **not** creator-restricted — any actor holding an active Requester assignment in Staff Settings may collect on a colleague's behalf; the collecting actor becomes the request's **custodian**. From then on (`cash_issued`/`returned_for_correction`), adding/removing receipts and settling are restricted to the current custodian, not the original creator. The custodian may offer custody to another active requester (`disbursements.handover`); the offer only takes effect once that person accepts it (`disbursements.accepthandover`), and either side can withdraw (`disbursements.cancelhandover`, custodian) or decline (`disbursements.declinehandover`, nominee) a pending offer — each has its own discoverable permission, like every other handler. Every offer, accept, decline and withdrawal is recorded in the request's audit timeline, and completed transfers are additionally recorded in `cash_handovers`. Hand-over is only possible before the request reaches `pending_closure`.
 
 ## Receipt permissions
 

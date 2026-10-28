@@ -47,12 +47,18 @@ model PettyCashRequest {
   closedBy             String?           @map("closed_by")
   closedAt             DateTime?         @map("closed_at")
   lastReminderAt       DateTime?         @map("last_reminder_at")
+  custodianEmployeeId        Int?        @map("custodian_employee_id") @db.UnsignedInt
+  custodianName              String?     @map("custodian_name")
+  pendingCustodianEmployeeId Int?        @map("pending_custodian_employee_id") @db.UnsignedInt
+  pendingCustodianName       String?     @map("pending_custodian_name")
+  pendingHandoverNote        String?     @map("pending_handover_note") @db.Text
   version              Int               @default(1) @map("version")
   createdAt            DateTime          @default(now()) @map("created_at")
   updatedAt            DateTime          @updatedAt @map("updated_at")
   expenses             Expense[]
   issuances            CashIssuance[]
   returns              CashReturn[]
+  handovers            CashHandover[]
   timeline             TimelineEvent[]
   transactions         FundTransaction[]
 
@@ -128,6 +134,21 @@ model CashReturn {
   acknowledged   Boolean      @default(true) @map("acknowledged")
 
   @@map("cash_returns")
+}
+
+model CashHandover {
+  id             String       @id @default(uuid()) @map("id") @db.VarChar(40)
+  requestId      String       @map("request_id") @db.VarChar(40)
+  request        PettyCashRequest @relation(fields: [requestId], references: [id])
+  fromEmployeeId Int          @map("from_employee_id") @db.UnsignedInt
+  fromName       String       @map("from_name")
+  toEmployeeId   Int          @map("to_employee_id") @db.UnsignedInt
+  toName         String       @map("to_name")
+  note           String?      @map("note") @db.Text
+  acceptedAt     DateTime     @default(now()) @map("accepted_at")
+
+  @@index([requestId])
+  @@map("cash_handovers")
 }
 
 model FundTransaction {

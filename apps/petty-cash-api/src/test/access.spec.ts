@@ -1,3 +1,4 @@
+import { PrismaModule } from '../prisma/prisma.module';
 import { PrismaService } from '../prisma/prisma.service';
 import { StaffAssignmentsController } from '../staff-assignments/staff-assignments.controller';
 import { StaffAssignmentsService } from '../staff-assignments/staff-assignments.service';
@@ -116,7 +117,7 @@ describe('MPAO boundary on all HTTP routes', () => {
     process.env.MPAO_ENTITY_ID = '1';
     process.env.APP_NAME = 'petty-cash';
     const module = await Test.createTestingModule({
-      imports: [IdentityTestModule, AuthModule, DiscoveryModule],
+      imports: [IdentityTestModule, AuthModule, DiscoveryModule, PrismaModule],
       controllers: [
         IdentityController,
         AccessController,
@@ -138,10 +139,6 @@ describe('MPAO boundary on all HTTP routes', () => {
       providers: [
         IdempotencyService,
         AccessService,
-        {
-          provide: PrismaService,
-          useValue: { staffAssignment: { findMany: jest.fn().mockResolvedValue([]) } },
-        },
         {
           provide: StaffAssignmentsService,
           useValue: { list: touched, lookup: touched, add: touched, remove: touched },
@@ -231,7 +228,15 @@ describe('MPAO boundary on all HTTP routes', () => {
           ),
         },
       ],
-    }).compile();
+    })
+      .overrideProvider(PrismaService)
+      .useValue({
+        staffAssignment: {
+          findMany: jest.fn().mockResolvedValue([]),
+          findFirst: jest.fn().mockResolvedValue(null),
+        },
+      })
+      .compile();
     app = module.createNestApplication();
     await app.init();
   });

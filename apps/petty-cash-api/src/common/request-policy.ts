@@ -23,8 +23,19 @@ export function capabilities(a: Actor) {
     resolveCount: can(a, 'vaultcounts.resolve'),
   };
 }
-export function allowedActions(r: { status: string; requesterId: string }, a: Actor): string[] {
+export function allowedActions(
+  r: {
+    status: string;
+    requesterId: string;
+    custodianEmployeeId?: number | null;
+    pendingCustodianEmployeeId?: number | null;
+  },
+  a: Actor,
+): string[] {
   const own = r.requesterId === a.id;
+  const isCustodian = r.custodianEmployeeId != null && r.custodianEmployeeId === a.entityId;
+  const isNominee =
+    r.pendingCustodianEmployeeId != null && r.pendingCustodianEmployeeId === a.entityId;
   const actions: string[] = [];
   if (r.status === 'pending_approval') {
     if (own && can(a, 'requests.edit')) actions.push('edit');
@@ -33,13 +44,29 @@ export function allowedActions(r: { status: string; requesterId: string }, a: Ac
   }
   if (r.status === 'pending_finance' && can(a, 'disbursements.notifycollection'))
     actions.push('notifyCollection');
-  if (r.status === 'ready_for_collection' && own && can(a, 'disbursements.confirmreceipt'))
+  if (
+    r.status === 'ready_for_collection' &&
+    a.activeRequester &&
+    can(a, 'disbursements.confirmreceipt')
+  )
     actions.push('confirmReceipt');
   if (['cash_issued', 'returned_for_correction'].includes(r.status)) {
-    if (own && can(a, 'expenses.addexpense')) actions.push('addExpense');
-    if (own && (can(a, 'expenses.addexpense') || can(a, 'expenses.removeexpense')))
+    if (isCustodian && can(a, 'expenses.addexpense')) actions.push('addExpense');
+    if (isCustodian && (can(a, 'expenses.addexpense') || can(a, 'expenses.removeexpense')))
       actions.push('removeExpense');
-    if (own && can(a, 'settlements.settle')) actions.push('settle');
+    if (isCustodian && can(a, 'settlements.settle')) actions.push('settle');
+    if (
+      isCustodian &&
+      !r.pendingCustodianEmployeeId &&
+      a.activeRequester &&
+      can(a, 'disbursements.handover')
+    )
+      actions.push('handOver');
+    if (isNominee && can(a, 'disbursements.accepthandover')) actions.push('acceptHandover');
+    if (isCustodian && r.pendingCustodianEmployeeId && can(a, 'disbursements.cancelhandover'))
+      actions.push('cancelHandover');
+    if (isNominee && r.pendingCustodianEmployeeId && can(a, 'disbursements.declinehandover'))
+      actions.push('declineHandover');
     if (can(a, 'notifications.sendreminder')) actions.push('sendReminder');
   }
   if (r.status === 'pending_closure') {
@@ -58,6 +85,10 @@ export const ACTION_STATES: Record<string, string[]> = {
   addExpense: ['cash_issued', 'returned_for_correction'],
   removeExpense: ['cash_issued', 'returned_for_correction'],
   settle: ['cash_issued', 'returned_for_correction'],
+  handOver: ['cash_issued', 'returned_for_correction'],
+  acceptHandover: ['cash_issued', 'returned_for_correction'],
+  cancelHandover: ['cash_issued', 'returned_for_correction'],
+  declineHandover: ['cash_issued', 'returned_for_correction'],
   sendReminder: ['cash_issued', 'returned_for_correction'],
   returnForCorrection: ['pending_closure'],
   finalize: ['pending_closure'],

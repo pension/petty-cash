@@ -62,9 +62,15 @@ export class RequestWorkflowService {
         data: { ...update, version: { increment: 1 } },
       });
       await this.audit.record(tx, id, actor, type, title, description);
-      if (['edit', 'authorize', 'settle'].includes(action))
+      const audiences: Record<string, string> = {
+        edit: 'GS_MANAGER',
+        authorize: 'FINANCE_STAFF',
+        settle: 'FINANCE_STAFF',
+        handOver: 'GS_REQUESTER',
+      };
+      if (audiences[action])
         await this.notifications.create(tx, title, description, `/requests/${id}`, {
-          audience: action === 'edit' ? 'GS_MANAGER' : 'FINANCE_STAFF',
+          audience: audiences[action],
         });
       if (
         [

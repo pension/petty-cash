@@ -6,19 +6,19 @@ import { PrismaService } from '../prisma/prisma.service';
 export class AccessService {
   constructor(private readonly db: PrismaService) {}
   async get(a: Actor) {
-    const assignments =
+    const approver =
       Number.isSafeInteger(a.entityId) && a.entityId! > 0
-        ? await this.db.staffAssignment.findMany({
-            where: { employeeId: a.entityId, removedAt: null },
+        ? await this.db.staffAssignment.findFirst({
+            where: { type: 'approver', employeeId: a.entityId, removedAt: null },
             select: { type: true },
           })
-        : [];
+        : null;
     return {
       roles: a.roles,
       capabilities: capabilities(a),
       staffEligibility: {
-        requester: assignments.some((row) => row.type === 'requester'),
-        approver: assignments.some((row) => row.type === 'approver'),
+        requester: a.activeRequester,
+        approver: !!approver,
       },
     };
   }

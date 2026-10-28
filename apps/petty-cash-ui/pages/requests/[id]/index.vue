@@ -55,10 +55,43 @@
               @button-click="showBulkReceiptsModal = true"
             />
             <PoButton
+              v-if="request.allowedActions.includes('handOver')"
+              action-type="ghost"
+              label="Hand over"
+              :icon="ArrowsRightLeftIcon"
+              :disabled="store.busy"
+              @button-click="openHandOverModal"
+            />
+            <PoButton
+              v-if="request.allowedActions.includes('cancelHandover')"
+              action-type="ghost"
+              label="Withdraw offer"
+              :icon="XCircleIcon"
+              :disabled="store.busy"
+              @button-click="handleCancelHandover"
+            />
+            <PoButton
               label="Settle"
               :icon="CheckCircleIcon"
               :disabled="store.busy"
               @button-click="showSettleModal = true"
+            />
+          </template>
+
+          <!-- Staff: respond to a cash custody hand-over offer -->
+          <template v-else-if="request.allowedActions.includes('acceptHandover')">
+            <PoButton
+              action-type="ghost"
+              label="Decline"
+              :icon="XCircleIcon"
+              :disabled="store.busy"
+              @button-click="handleDeclineHandover"
+            />
+            <PoButton
+              label="Accept hand-over"
+              :icon="CheckBadgeIcon"
+              :disabled="store.busy"
+              @button-click="handleAcceptHandover"
             />
           </template>
 
@@ -121,6 +154,19 @@
           msg-type="orange"
           title="Your cash is ready at the Finance counter"
           message="Collect it from Finance, count it, then confirm receipt here."
+        />
+
+        <PoMessage
+          v-if="request.allowedActions.includes('acceptHandover')"
+          msg-type="orange"
+          title="Cash custody offered to you"
+          :message="`${request.custodianName} wants to hand you MVR ${formatMoney(request.totalCashIssued)}. Accept once you physically have the cash.`"
+        />
+        <PoMessage
+          v-else-if="request.allowedActions.includes('cancelHandover')"
+          msg-type="blue"
+          title="Hand-over offered"
+          :message="`Waiting for ${request.pendingCustodianName} to accept custody of this cash.`"
         />
 
         <PoMessage
@@ -443,6 +489,53 @@
       </template>
     </PoModal>
 
+    <!-- Hand over cash custody (Requester) -->
+    <PoModal
+      :show="showHandOverModal"
+      modal-title="Hand over cash"
+      modal-width="sm:max-w-md"
+      @modal-closed="showHandOverModal = false"
+    >
+      <template #content>
+        <div class="space-y-4">
+          <PoTypography size="xs" variant="dimmed" class="block">
+            Choose who will take over this request's cash and the responsibility to add receipts
+            and settle it. They must accept before custody actually transfers.
+          </PoTypography>
+          <PoSelectField
+            v-model="handOverTargetId"
+            label="Hand over to"
+            :list="handOverCandidateOptions"
+            placeholder="Select a requester"
+            required
+          />
+          <PoInputField
+            v-model="handOverNote"
+            label="Note (optional)"
+            placeholder="e.g. Going on leave, handing over to..."
+          />
+        </div>
+      </template>
+      <template #footer>
+        <div class="p-4 flex justify-end gap-2 border-t border-slate-100">
+          <PoButton
+            label="Cancel"
+            action-type="ghost"
+            size="sm"
+            :disabled="store.busy"
+            @button-click="showHandOverModal = false"
+          />
+          <PoButton
+            label="Send offer"
+            size="sm"
+            :icon="ArrowsRightLeftIcon"
+            :disabled="store.busy || !handOverTargetId"
+            @button-click="handleConfirmHandOver"
+          />
+        </div>
+      </template>
+    </PoModal>
+
     <!-- Finalize & close with cash count (Finance) -->
     <PoModal
       :show="showFinalizeModal"
@@ -455,11 +548,12 @@
           <PoDescriptionList
             density="compact"
             :items="[
-              { title: 'Cash received', description: formatMoney(cashReceived) },
+              { title: 'Cash Disbursed', description: formatMoney(cashReceived) },
               {
                 title: 'Receipts',
                 description: `${request.expenses.length} · ${formatMoney(spentTotal)}`,
               },
+              { title: 'Cash returned', description: formatMoney(balanceToReturn) },
             ]"
           />
 
@@ -476,30 +570,10 @@
             message="The receipts account for all the cash issued."
           />
 
-          <div v-else class="space-y-1.5">
-            <PoTypography size="xs" variant="dimmed" class="block">
-              Enter the MVR {{ formatMoney(balanceToReturn) }} handed back by
-              {{ request.requester.name }}.
-            </PoTypography>
-            <PoInputField
-              v-model="returnedAmount"
-              label="Cash returned (MVR)"
-              type="number"
-              :min="0"
-              placeholder="0.00"
-              required
-            />
-          </div>
           <PoInputField
             v-model="closeDynamicsRef"
             label="Dynamics reference (optional)"
             placeholder="e.g. DYN-PC-0132"
-          />
-          <PoMessage
-            v-if="balanceToReturn > 0 && returnDifference !== 0"
-            msg-type="orange"
-            title="Count doesn't match"
-            :message="`The counted cash is ${returnDifference > 0 ? 'more' : 'less'} than expected by ${formatMoney(Math.abs(returnDifference))}. It will be recorded as a discrepancy.`"
           />
         </div>
       </template>
@@ -514,10 +588,9 @@
           />
           <PoButton
             :label="finalizeLabel"
-            :action-type="hasReturnDiscrepancy ? 'orange' : 'default'"
             size="sm"
             :icon="ArchiveBoxIcon"
-            :disabled="store.busy || (balanceToReturn > 0 && !hasReturnAmount)"
+            :disabled="store.busy"
             @button-click="handleConfirmFinalize"
           />
         </div>
@@ -631,6 +704,7 @@ import ReceiptAttachmentPreview from '~/components/petty-cash/ReceiptAttachmentP
 import {
   ArchiveBoxIcon,
   ArrowDownTrayIcon,
+  ArrowsRightLeftIcon,
   ArrowUturnLeftIcon,
   BanknotesIcon,
   CheckBadgeIcon,
@@ -657,6 +731,7 @@ import {
   PoModal,
   PoPageStatus,
   PoPageTitle,
+  PoSelectField,
   PoSlideover,
   PoStatusPill,
   PoTableAction,
@@ -749,6 +824,72 @@ async function handleConfirmSettle() {
   }
 }
 
+// Cash custody hand-over (Requester)
+const showHandOverModal = ref(false);
+const handOverTargetId = ref<number | null>(null);
+const handOverNote = ref('');
+const handOverCandidateOptions = ref<{ id: number; name: string }[]>([]);
+
+async function openHandOverModal() {
+  if (!request.value) return;
+  handOverTargetId.value = null;
+  handOverNote.value = '';
+  showHandOverModal.value = true;
+  try {
+    const candidates = await store.fetchHandoverCandidates(request.value.id);
+    handOverCandidateOptions.value = candidates.map((c) => ({ id: c.employeeId, name: c.name }));
+  } catch (err) {
+    showToast(
+      err instanceof Error ? err.message : 'Could not load eligible staff.',
+      'error',
+    );
+  }
+}
+
+async function handleConfirmHandOver() {
+  try {
+    if (!request.value || !handOverTargetId.value) return;
+    await store.handOverCash(request.value.id, {
+      toEmployeeId: handOverTargetId.value,
+      note: handOverNote.value.trim() || undefined,
+    });
+    showHandOverModal.value = false;
+    showToast('Hand-over offered', 'success');
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : 'Could not complete this action.', 'error');
+  }
+}
+
+async function handleCancelHandover() {
+  try {
+    if (!request.value || store.busy) return;
+    await store.cancelHandover(request.value.id);
+    showToast('Hand-over withdrawn', 'info');
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : 'Could not complete this action.', 'error');
+  }
+}
+
+async function handleAcceptHandover() {
+  try {
+    if (!request.value || store.busy) return;
+    await store.acceptHandover(request.value.id);
+    showToast('Cash custody accepted', 'success');
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : 'Could not complete this action.', 'error');
+  }
+}
+
+async function handleDeclineHandover() {
+  try {
+    if (!request.value || store.busy) return;
+    await store.declineHandover(request.value.id);
+    showToast('Hand-over declined', 'info');
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : 'Could not complete this action.', 'error');
+  }
+}
+
 const showReceiptSlideover = ref(false);
 const previewExpense = ref<ExpenseItem | null>(null);
 
@@ -775,6 +916,9 @@ const detailItems = computed(() => {
     },
     { title: 'Submitted Date', description: formatDate(request.value.createdAt) },
     { title: 'Needed by', description: formatDate(request.value.effectiveClosingDate) },
+    ...(request.value.custodianName
+      ? [{ title: 'Held by', description: request.value.custodianName }]
+      : []),
     ...(request.value.dynamicsReference
       ? [{ title: 'Dynamics Voucher', description: request.value.dynamicsReference }]
       : []),
@@ -860,34 +1004,24 @@ const showPrepareModal = ref(false);
 
 // Finalize & close with cash count (Finance)
 const showFinalizeModal = ref(false);
-const returnedAmount = ref<number | ''>('');
-const hasReturnAmount = computed(() => returnedAmount.value !== '');
-const returnDifference = computed(() =>
-  cashDifference(Number(returnedAmount.value) || 0, balanceToReturn.value),
-);
-const hasReturnDiscrepancy = computed(
-  () => balanceToReturn.value > 0 && returnDifference.value !== 0,
-);
 
 const finalizeLabel = computed(() => {
   if (overspend.value > 0) return `Pay ${formatMoney(overspend.value)} & close`;
-  return hasReturnDiscrepancy.value ? 'Close with discrepancy' : 'Confirm & close';
+  return 'Confirm & close';
 });
 
 const closeDynamicsRef = ref('');
 
 function openFinalizeModal() {
-  returnedAmount.value = '';
   closeDynamicsRef.value = request.value?.dynamicsReference || '';
   showFinalizeModal.value = true;
 }
 
 async function handleConfirmFinalize() {
-  if (balanceToReturn.value > 0 && !hasReturnAmount.value) return;
   try {
     if (!request.value) return;
     await store.finalizeRequest(request.value.id, {
-      returnedAmount: balanceToReturn.value > 0 ? Number(returnedAmount.value) || 0 : undefined,
+      returnedAmount: balanceToReturn.value > 0 ? balanceToReturn.value : undefined,
       dynamicsReference: closeDynamicsRef.value.trim() || undefined,
     });
     showFinalizeModal.value = false;

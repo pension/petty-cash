@@ -5,6 +5,10 @@ const requesterActions = new Set([
   'addExpense',
   'removeExpense',
   'settle',
+  'handOver',
+  'acceptHandover',
+  'cancelHandover',
+  'declineHandover',
 ]);
 export function eligibleActions(actions: string[], eligibility: StaffEligibility): string[] {
   return actions.filter((action) => {

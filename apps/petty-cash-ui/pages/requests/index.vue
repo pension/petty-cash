@@ -23,6 +23,9 @@
               @update:model-value="searchHistory"
             />
           </div>
+          <div class="shrink-0">
+            <PoDateRangePicker v-model="dateRange" @update:model-value="loadHistory(1)" />
+          </div>
           <div class="hidden sm:flex shrink-0 items-center gap-3">
             <span class="hidden lg:block border-l border-slate-300 h-4 w-px ml-1" />
             <PoPagination
@@ -101,6 +104,7 @@ import {
   PoButton,
   PoCard,
   PoContentArea,
+  PoDateRangePicker,
   PoEmpty,
   PoPageTitle,
   PoPagination,
@@ -126,6 +130,11 @@ const store = usePettyCashStore();
 const { showToast } = useToastify();
 
 const searchQuery = ref(String(store.requestQuery.q || ''));
+const dateRange = ref<{ from: string; to: string } | null>(
+  store.requestQuery.from || store.requestQuery.to
+    ? { from: String(store.requestQuery.from || ''), to: String(store.requestQuery.to || '') }
+    : null,
+);
 const currentPage = computed(() => store.listPage);
 const itemsPerPage = 10;
 
@@ -141,6 +150,8 @@ async function loadHistory(page: number) {
         sort: 'closedAt',
         order: 'desc',
         q: searchQuery.value.trim(),
+        from: dateRange.value?.from || undefined,
+        to: dateRange.value?.to || undefined,
         page,
         pageSize: itemsPerPage,
       },

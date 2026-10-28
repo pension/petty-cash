@@ -12,15 +12,26 @@ export type Actor = {
   permissions: Permission[];
   /** Workflow audience labels only; authorization checks individual permissions. */
   roles: Role[];
+  /** Active Requester entry in Staff Settings for this actor's entityId. */
+  activeRequester: boolean;
 };
 export const can = (actor: Actor, permission: Permission) => actor.permissions.includes(permission);
-export function actorFrom(user: AuthUser, permissions: Permission[]): Actor {
+export function actorFrom(
+  user: AuthUser,
+  permissions: Permission[],
+  activeRequester = false,
+): Actor {
   if (!user?.uuid) throw new ForbiddenException('A Bifrost user identity is required.');
   const audiences: Record<Role, Permission[]> = {
     GS_REQUESTER: [
       'requests.create',
       'requests.edit',
       'disbursements.confirmreceipt',
+      'disbursements.handover',
+      'disbursements.accepthandover',
+      'disbursements.cancelhandover',
+      'disbursements.declinehandover',
+      'disbursements.handovercandidates',
       'expenses.addexpense',
       'expenses.removeexpense',
       'settlements.settle',
@@ -46,5 +57,6 @@ export function actorFrom(user: AuthUser, permissions: Permission[]): Actor {
     roles: ROLES.filter((role) =>
       audiences[role].some((permission) => permissions.includes(permission)),
     ),
+    activeRequester,
   };
 }

@@ -20,6 +20,7 @@ const actor: Actor = {
   email: 'test@example.test',
   roles: [],
   permissions: [],
+  activeRequester: false,
 };
 function setup() {
   const delegate = <T>() => ({
@@ -73,6 +74,21 @@ describe('list pagination and filters', () => {
     const { db, prisma } = setup();
     await new RequestRecordsService(prisma).list({ q: '   ' }, actor);
     expect(db.pettyCashRequest.findMany.mock.calls[0][0].where?.OR).toBeUndefined();
+  });
+
+  test('History date range filters by closedAt with Maldives date boundaries', async () => {
+    const { db, prisma } = setup();
+    await new RequestRecordsService(prisma).list(
+      { status: 'closed', from: '2026-10-01', to: '2026-10-22' },
+      actor,
+    );
+    const query = db.pettyCashRequest.findMany.mock.calls[0][0];
+    expect(query.where).toMatchObject({
+      closedAt: {
+        gte: new Date('2026-09-30T19:00:00.000Z'),
+        lte: new Date('2026-10-22T18:59:59.999Z'),
+      },
+    });
   });
 
   test.each(['list', 'history'] as const)(
@@ -160,6 +176,7 @@ describe('list pagination and filters', () => {
       null!,
       null!,
       records as unknown as RequestRecordsService,
+      null!,
     );
     await service.list({ status, page: '2' }, actor);
     expect(records.list).toHaveBeenCalledWith({ status, page: '2' }, actor);

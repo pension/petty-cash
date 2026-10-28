@@ -13,6 +13,7 @@ const actor: Actor = {
   email: 'admin@example.test',
   permissions: [],
   roles: [],
+  activeRequester: false,
 };
 const employee = {
   employeeId: 42,
@@ -130,13 +131,21 @@ test('access reports only the verified person’s active assignments and leaves 
   const { service, db } = setup();
   await service.add(input, actor);
   const access = new AccessService(db);
-  const result = await access.get(actor);
+  // `requester` eligibility is trusted from the actor (computed upstream by ActorPipe from entityId);
+  // `approver` is independently re-derived here from staff_assignments.
+  const result = await access.get({ ...actor, activeRequester: true });
   expect(result.staffEligibility).toEqual({ requester: true, approver: false });
   expect(result.capabilities.createRequest).toBe(false);
-  const unlisted = await access.get({ ...actor, entityId: 99, permissions: ['requests.create'] });
+  const unlisted = await access.get({
+    ...actor,
+    entityId: 99,
+    permissions: ['requests.create'],
+    activeRequester: false,
+  });
   expect(unlisted.staffEligibility.requester).toBe(false);
   expect(unlisted.capabilities.createRequest).toBe(true);
-  expect((await access.get({ ...actor, entityId: undefined })).staffEligibility.requester).toBe(
-    false,
-  );
+  expect(
+    (await access.get({ ...actor, entityId: undefined, activeRequester: false })).staffEligibility
+      .requester,
+  ).toBe(false);
 });

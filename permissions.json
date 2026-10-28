@@ -46,7 +46,37 @@
     {
       "subject": "disbursements",
       "action": "confirmreceipt",
-      "description": "Confirm collection of own petty cash",
+      "description": "Confirm collection of petty cash",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "disbursements",
+      "action": "handover",
+      "description": "Offer a cash custody hand-over to another requester",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "disbursements",
+      "action": "accepthandover",
+      "description": "Accept an offered cash custody hand-over",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "disbursements",
+      "action": "cancelhandover",
+      "description": "Withdraw an offered cash custody hand-over",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "disbursements",
+      "action": "declinehandover",
+      "description": "Decline an offered cash custody hand-over",
+      "organisation": "Maldives Pension Administration Office"
+    },
+    {
+      "subject": "disbursements",
+      "action": "handovercandidates",
+      "description": "List staff eligible to receive a cash custody hand-over",
       "organisation": "Maldives Pension Administration Office"
     },
     {

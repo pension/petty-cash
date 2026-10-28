@@ -63,28 +63,44 @@ integration('Petty Cash MySQL financial workflow', () => {
   let access: AccessService;
   const gs: Actor = {
     id: 'test-gs',
+    entityId: 101,
     name: 'GS Staff',
     email: 'gs@example.test',
     roles: ['GS_REQUESTER'],
     permissions: ROLE_PERMISSIONS.GS_REQUESTER,
+    activeRequester: true,
+  };
+  const gs2: Actor = {
+    id: 'test-gs-2',
+    entityId: 105,
+    name: 'GS Staff Two',
+    email: 'gs2@example.test',
+    roles: ['GS_REQUESTER'],
+    permissions: ROLE_PERMISSIONS.GS_REQUESTER,
+    activeRequester: true,
   };
   const manager: Actor = {
     id: 'test-manager',
+    entityId: 102,
     name: 'GS Manager',
     email: 'manager@example.test',
     roles: ['GS_MANAGER'],
     permissions: ROLE_PERMISSIONS.GS_MANAGER,
+    activeRequester: false,
   };
   const finance: Actor = {
     id: 'test-finance',
+    entityId: 103,
     name: 'Finance',
     email: 'finance@example.test',
     roles: ['FINANCE_STAFF'],
     permissions: ROLE_PERMISSIONS.FINANCE_STAFF,
+    activeRequester: false,
   };
   const supervisor: Actor = {
     ...finance,
     id: 'test-supervisor',
+    entityId: 104,
     roles: ['FINANCE_SUPERVISOR'],
     permissions: ROLE_PERMISSIONS.FINANCE_SUPERVISOR,
   };
@@ -117,6 +133,14 @@ integration('Petty Cash MySQL financial workflow', () => {
         return expenses.removeExpense(id, data, actor, expenseId!);
       case 'settle':
         return settlements.settle(id, data, actor);
+      case 'handOver':
+        return disbursements.handOver(id, data, actor);
+      case 'acceptHandover':
+        return disbursements.acceptHandover(id, data, actor);
+      case 'cancelHandover':
+        return disbursements.cancelHandover(id, data, actor);
+      case 'declineHandover':
+        return disbursements.declineHandover(id, data, actor);
       case 'returnForCorrection':
         return settlements.returnForCorrection(id, data, actor);
       case 'finalize':
@@ -150,6 +174,7 @@ integration('Petty Cash MySQL financial workflow', () => {
           if (!actor) return false;
           req.user = {
             uuid: actor.id,
+            entity_id: actor.entityId,
             name: actor.name,
             email: actor.email,
             transacting_as: 1,
@@ -200,6 +225,28 @@ integration('Petty Cash MySQL financial workflow', () => {
         },
       });
     });
+    // The real ActorPipe (only IdentityGuard is mocked) looks up staff_assignments by entityId
+    // to compute `activeRequester`, which confirmReceipt now requires for the HTTP-driven test.
+    for (const person of [gs, gs2])
+      if (
+        !(await db.staffAssignment.findFirst({
+          where: { type: 'requester', employeeId: person.entityId, removedAt: null },
+        }))
+      )
+        await db.staffAssignment.create({
+          data: {
+            id: randomUUID(),
+            type: 'requester',
+            employeeId: person.entityId!,
+            activeEmployeeId: person.entityId!,
+            name: person.name,
+            email: person.email,
+            designation: 'Officer',
+            department: 'General Services',
+            addedBy: 'test-setup',
+            addedByName: 'Test Setup',
+          },
+        });
   });
   afterAll(async () => {
     await app?.close();
@@ -502,6 +549,45 @@ integration('Petty Cash MySQL financial workflow', () => {
     updated = await requests.get(r.id, gs);
     expect(updated.correctionNote).toBeNull();
   });
+  test('cash custody hand-over requires acceptance, replaces the custodian, and can be withdrawn or declined', async () => {
+    const r = await issue(100);
+    const receipt = {
+      supplierName: 'Vendor',
+      description: 'Supplies',
+      expenseDate: today(),
+      amount: 5,
+    };
+    // Before any offer, only the current custodian (gs) can touch receipts/settle.
+    await expect(transition(r.id, 'addExpense', receipt, gs2)).rejects.toMatchObject({
+      status: 403,
+    });
+
+    // Offer, then decline: custody stays with gs.
+    await transition(r.id, 'handOver', { toEmployeeId: gs2.entityId, note: 'Going on leave' }, gs);
+    await expect(transition(r.id, 'acceptHandover', {}, gs)).rejects.toMatchObject({ status: 403 });
+    const declined = await transition(r.id, 'declineHandover', {}, gs2);
+    expect(declined.custodianName).toBe(gs.name);
+    expect(declined.pendingCustodianName).toBeNull();
+
+    // Offer again, then withdraw: custody still stays with gs.
+    await transition(r.id, 'handOver', { toEmployeeId: gs2.entityId }, gs);
+    await expect(transition(r.id, 'addExpense', receipt, gs2)).rejects.toMatchObject({
+      status: 403,
+    });
+    const cancelled = await transition(r.id, 'cancelHandover', {}, gs);
+    expect(cancelled.pendingCustodianName).toBeNull();
+
+    // Offer again, accept: custody moves to gs2, who can now act, and gs can no longer.
+    await transition(r.id, 'handOver', { toEmployeeId: gs2.entityId }, gs);
+    const accepted = await transition(r.id, 'acceptHandover', {}, gs2);
+    expect(accepted.custodianName).toBe(gs2.name);
+    await expect(transition(r.id, 'addExpense', receipt, gs)).rejects.toMatchObject({
+      status: 403,
+    });
+    await transition(r.id, 'addExpense', receipt, gs2);
+    await transition(r.id, 'settle', {}, gs2);
+    expect(await db.cashHandover.count({ where: { requestId: r.id } })).toBe(1);
+  });
   test('permission-based approval and finalization including own requests', async () => {
     const r = await create();
     await expect(transition(r.id, 'authorize', {}, gs)).rejects.toMatchObject({
@@ -666,7 +752,7 @@ integration('Petty Cash MySQL financial workflow', () => {
         fileId: attached.id,
       };
       await expect(
-        transition(r.id, 'addExpense', body, { ...gs, id: 'another-gs' }),
+        transition(r.id, 'addExpense', body, { ...gs, id: 'another-gs', entityId: 999 }),
       ).rejects.toMatchObject({ status: 403 });
       const added = await transition(r.id, 'addExpense', body, gs);
       await transition(r.id, 'removeExpense', {}, gs, undefined, added.expenses![0].id);

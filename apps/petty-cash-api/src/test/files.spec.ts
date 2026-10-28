@@ -105,6 +105,7 @@ describe('multipart upload lifecycle', () => {
     email: 'gs@example.test',
     roles: ['GS_REQUESTER'],
     permissions: ['files.upload', 'files.download'],
+    activeRequester: false,
   };
   beforeAll(async () => {
     directory = await mkdtemp(join(tmpdir(), 'petty-cash-upload-test-'));

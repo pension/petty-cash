@@ -6,14 +6,22 @@ import type { Actor } from '../auth/actor';
 import { RequestWorkflowService } from '../common/request-workflow.service';
 import { parse } from '../common/validation';
 import { LedgerService } from '../ledger/ledger.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { ConfirmReceiptSchema } from './dto/confirm-receipt.dto';
+import { HandOverSchema } from './dto/hand-over.dto';
 import { NotifyCollectionSchema } from './dto/notify-collection.dto';
+import {
+  AcceptHandoverSchema,
+  CancelHandoverSchema,
+  DeclineHandoverSchema,
+} from './dto/respond-handover.dto';
 @Injectable()
 export class DisbursementsService {
   constructor(
     private readonly workflow: RequestWorkflowService,
     private readonly ledger: LedgerService,
     private readonly records: RequestRecordsService,
+    private readonly db: PrismaService,
   ) {}
   list(q: ListQuery, a: Actor) {
     const statuses = [
@@ -75,6 +83,8 @@ export class DisbursementsService {
         });
         update.status = 'cash_issued';
         update.totalCashIssued = r.approvedAmount;
+        update.custodianEmployeeId = a.entityId;
+        update.custodianName = a.name;
         const type = 'acknowledged';
         const title = 'Cash Handed Over & Receipt Acknowledged';
         const description = `${a.name} received MVR ${r.approvedAmount.toString()} prepared by ${r.preparedBy}.`;
@@ -82,5 +92,84 @@ export class DisbursementsService {
       },
       key,
     );
+  }
+  handoverCandidates(a: Actor) {
+    return this.db.staffAssignment.findMany({
+      where: { type: 'requester', removedAt: null, NOT: { employeeId: a.entityId ?? -1 } },
+      select: { employeeId: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+  async handOver(id: string, body: unknown, a: Actor) {
+    const d = parse(HandOverSchema, body);
+    const target = await this.db.staffAssignment.findFirst({
+      where: { type: 'requester', removedAt: null, employeeId: d.toEmployeeId },
+    });
+    if (!target) throw new BadRequestException('Select an active requester to hand over to.');
+    if (target.employeeId === a.entityId)
+      throw new BadRequestException('You already hold this cash.');
+    return this.workflow.run(id, 'handOver', d, a, (_tx, r) => ({
+      update: {
+        pendingCustodianEmployeeId: target.employeeId,
+        pendingCustodianName: target.name,
+        pendingHandoverNote: d.note ?? null,
+      },
+      type: 'handover_requested',
+      title: 'Cash Hand-over Offered',
+      description: `${a.name} offered to hand MVR ${r.totalCashIssued.toString()} to ${target.name}.${d.note ? ' Note: ' + d.note : ''}`,
+    }));
+  }
+  async acceptHandover(id: string, body: unknown, a: Actor) {
+    const d = parse(AcceptHandoverSchema, body);
+    return this.workflow.run(id, 'acceptHandover', d, a, async (tx, r) => {
+      await tx.cashHandover.create({
+        data: {
+          requestId: id,
+          fromEmployeeId: r.custodianEmployeeId!,
+          fromName: r.custodianName!,
+          toEmployeeId: a.entityId!,
+          toName: a.name,
+          note: r.pendingHandoverNote,
+        },
+      });
+      return {
+        update: {
+          custodianEmployeeId: a.entityId,
+          custodianName: a.name,
+          pendingCustodianEmployeeId: null,
+          pendingCustodianName: null,
+          pendingHandoverNote: null,
+        },
+        type: 'handover_accepted',
+        title: 'Cash Custody Accepted',
+        description: `${a.name} accepted custody of MVR ${r.totalCashIssued.toString()} from ${r.custodianName}.`,
+      };
+    });
+  }
+  async cancelHandover(id: string, body: unknown, a: Actor) {
+    const d = parse(CancelHandoverSchema, body);
+    return this.workflow.run(id, 'cancelHandover', d, a, (_tx, r) => ({
+      update: {
+        pendingCustodianEmployeeId: null,
+        pendingCustodianName: null,
+        pendingHandoverNote: null,
+      },
+      type: 'handover_cancelled',
+      title: 'Cash Hand-over Withdrawn',
+      description: `${a.name} withdrew the offer to hand over cash to ${r.pendingCustodianName}.`,
+    }));
+  }
+  async declineHandover(id: string, body: unknown, a: Actor) {
+    const d = parse(DeclineHandoverSchema, body);
+    return this.workflow.run(id, 'declineHandover', d, a, (_tx, r) => ({
+      update: {
+        pendingCustodianEmployeeId: null,
+        pendingCustodianName: null,
+        pendingHandoverNote: null,
+      },
+      type: 'handover_declined',
+      title: 'Cash Hand-over Declined',
+      description: `${a.name} declined to take over cash custody from ${r.custodianName}.`,
+    }));
   }
 }

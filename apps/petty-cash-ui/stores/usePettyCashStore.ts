@@ -532,6 +532,10 @@ export const usePettyCashStore = defineStore('pettyCash', () => {
             'confirm-receipt': 'confirmReceipt',
             expenses: 'addExpense',
             settle: 'settle',
+            'hand-over': 'handOver',
+            'accept-handover': 'acceptHandover',
+            'cancel-handover': 'cancelHandover',
+            'decline-handover': 'declineHandover',
             reminders: 'sendReminder',
             'return-for-correction': 'returnForCorrection',
             finalize: 'finalize',
@@ -595,6 +599,15 @@ export const usePettyCashStore = defineStore('pettyCash', () => {
   const deleteExpense = (id: string, expenseId: string) =>
     action(id, `expenses/${expenseId}`, {}, 'DELETE');
   const submitForClosure = (id: string) => action(id, 'settle');
+  const fetchHandoverCandidates = (id: string) =>
+    api<{ employeeId: number; name: string }[]>(
+      `/requests/${encodeURIComponent(id)}/handover-candidates`,
+    );
+  const handOverCash = (id: string, p: { toEmployeeId: number; note?: string }) =>
+    action(id, 'hand-over', p);
+  const acceptHandover = (id: string) => action(id, 'accept-handover');
+  const cancelHandover = (id: string) => action(id, 'cancel-handover');
+  const declineHandover = (id: string) => action(id, 'decline-handover');
   const sendReminder = (id: string) => action(id, 'reminders');
   const returnSettlementForCorrection = (id: string, note: string) =>
     action(id, 'return-for-correction', { note });
@@ -735,6 +748,11 @@ export const usePettyCashStore = defineStore('pettyCash', () => {
     addExpenses,
     deleteExpense,
     submitForClosure,
+    fetchHandoverCandidates,
+    handOverCash,
+    acceptHandover,
+    cancelHandover,
+    declineHandover,
     sendReminder,
     returnSettlementForCorrection,
     finalizeRequest,
