@@ -142,7 +142,7 @@ test('request and finance role templates have separate pages and actions', () =>
   expect(capabilities(finance)).toMatchObject({
     viewRequests: false,
     viewApprovals: false,
-    viewHistory: false,
+    viewHistory: true,
     viewFinance: true,
     viewReconciliation: true,
     viewLedger: true,

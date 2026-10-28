@@ -68,6 +68,7 @@ export const ROLE_PERMISSION_GROUPS: Record<'request' | 'finance', Permission[]>
     'staffassignments.lookup',
     'staffassignments.add',
     'staffassignments.remove',
+    'requests.history',
     'disbursements.list',
     'disbursements.notifycollection',
     'settlements.returnforcorrection',

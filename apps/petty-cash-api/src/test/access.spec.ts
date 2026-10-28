@@ -364,7 +364,7 @@ describe('MPAO boundary on all HTTP routes', () => {
     ['finance', '/fund/transactions', 200],
     ['finance', '/vault-counts', 200],
     ['finance', '/approvals', 403],
-    ['finance', '/requests/history', 403],
+    ['finance', '/requests/history', 200],
     ['finance', '/requests', 403],
   ] as const)('%s role: %s returns %s', async (role, path, status) => {
     await request(app.getHttpServer() as Server)

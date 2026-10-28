@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { Actor } from '../auth/actor';
 import { AuditService } from '../common/audit.service';
-import { countTotal, money } from '../common/money';
+import { money } from '../common/money';
 import { RequestWorkflowService } from '../common/request-workflow.service';
 import { parse } from '../common/validation';
 import { LedgerService } from '../ledger/ledger.service';
@@ -75,9 +75,9 @@ export class SettlementsService {
             `MVR ${balance.abs().toString()}`,
           );
         } else if (balance.gt(0)) {
-          if (!d.denominations)
-            throw new BadRequestException('Count the returned cash before closing.');
-          const actual = countTotal(d.denominations),
+          if (d.returnedAmount === undefined)
+            throw new BadRequestException('Enter the amount of cash returned before closing.');
+          const actual = money(d.returnedAmount),
             difference = actual.sub(balance);
           await tx.cashReturn.create({
             data: {
@@ -85,7 +85,7 @@ export class SettlementsService {
               expectedAmount: balance,
               actualAmount: actual,
               difference,
-              denominations: d.denominations,
+              denominations: Prisma.JsonNull,
               receivedBy: a.name,
               returnedBy: (r.requester as Requester).name,
             },

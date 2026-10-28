@@ -41,7 +41,10 @@ export class RequestWorkflowService {
   ) {
     const operation = async (tx: Prisma.TransactionClient) => {
       await tx.$queryRaw`SELECT id FROM requests WHERE id = ${id} FOR UPDATE`;
-      const request = await tx.pettyCashRequest.findUnique({ where: { id }, include: requestDetail });
+      const request = await tx.pettyCashRequest.findUnique({
+        where: { id },
+        include: requestDetail,
+      });
       if (!request) throw new NotFoundException('Request not found.');
       if (!ACTION_STATES[action].includes(request.status))
         throw new ConflictException(

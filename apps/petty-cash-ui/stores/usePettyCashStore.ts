@@ -470,7 +470,6 @@ export const usePettyCashStore = defineStore('pettyCash', () => {
           refresh && listEndpoint === '/requests'
             ? requestQuery.value
             : {
-                mine: true,
                 status:
                   'pending_approval,pending_finance,ready_for_collection,cash_issued,returned_for_correction,pending_closure',
               },
@@ -601,7 +600,7 @@ export const usePettyCashStore = defineStore('pettyCash', () => {
     action(id, 'return-for-correction', { note });
   const finalizeRequest = (
     id: string,
-    p: { denominations?: Record<string, number>; dynamicsReference?: string },
+    p: { returnedAmount?: number; dynamicsReference?: string },
   ) => action(id, 'finalize', p, 'POST', true);
   const addFundTopUp = (p: { amount: number; reference: string; notes?: string }) =>
     mutate('top-up', (key) => api('/fund/top-ups', 'POST', p, key), true);

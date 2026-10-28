@@ -101,27 +101,30 @@ export class RequestsService {
       return this.records.get(id, a, tx);
     });
   }
-  // For now a request is visible to its creator, plus GS approvers and Finance, who need
-  // the detail page to authorize, prepare cash and finalize.
+  // A request is visible to its creator, plus anyone holding one of the view permissions
+  // that already let them see it in a list: Requests, History, GS Approvals or Finance Desk.
   async get(id: string, a: Actor) {
     const r = await this.db.pettyCashRequest.findUnique({
       where: { id },
       select: { requesterId: true },
     });
     if (!r) throw new NotFoundException('Request not found.');
-    if (r.requesterId !== a.id && !can(a, 'approvals.list') && !can(a, 'disbursements.list'))
+    if (
+      r.requesterId !== a.id &&
+      !can(a, 'requests.list') &&
+      !can(a, 'requests.history') &&
+      !can(a, 'approvals.list') &&
+      !can(a, 'disbursements.list')
+    )
       throw new ForbiddenException('You can only view petty cash requests you created.');
     return this.records.get(id, a);
   }
-  // Requests and History list only the caller's own requests. GS Approvals and the
-  // Finance Desk use their own endpoints, which list every requester's requests.
+  // Requests and History list every requester's requests for actors holding the
+  // corresponding view permission, matching GS Approvals and the Finance Desk.
   history(q: ListQuery, a: Actor) {
-    return this.records.list(
-      { ...q, requesterId: undefined, mine: 'true', status: 'closed', sort: 'closedAt' },
-      a,
-    );
+    return this.records.list({ ...q, status: 'closed', sort: 'closedAt' }, a);
   }
   list(q: ListQuery, a: Actor) {
-    return this.records.list({ ...q, requesterId: undefined, mine: 'true' }, a);
+    return this.records.list({ ...q }, a);
   }
 }

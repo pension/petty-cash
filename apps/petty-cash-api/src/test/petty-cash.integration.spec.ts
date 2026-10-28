@@ -309,9 +309,7 @@ integration('Petty Cash MySQL financial workflow', () => {
     await post('return-for-correction', finance, { note: 'Confirm the invoice details' });
     await post('settle', gs);
     expect(row.declaredCashReturn).toBe(39.75);
-    await post('finalize', finance, {
-      denominations: { note20: 1, note10: 1, note5: 1, coin2: 2, coin0_5: 1, coin0_25: 1 },
-    });
+    await post('finalize', finance, { returnedAmount: 39.75 });
     expect(row.status).toBe('closed');
     expect(row.expenseTotal).toBe(60.25);
     expect((await fund.fund()).currentExpectedBalance).toBeCloseTo(before - 60.25, 2);
@@ -426,7 +424,7 @@ integration('Petty Cash MySQL financial workflow', () => {
       r.id,
       'finalize',
       {
-        denominations: { note100: 2, note20: 1 },
+        returnedAmount: 220,
         dynamicsReference: 'TEST-DYN',
       },
       finance,
@@ -444,10 +442,10 @@ integration('Petty Cash MySQL financial workflow', () => {
     await expect(db.fundTransaction.delete({ where: { id: row.id } })).rejects.toThrow();
   });
   test.each([
-    { spent: 900, counts: undefined, change: -50 },
-    { spent: 850, counts: undefined, change: 0 },
-    { spent: 630, counts: { note100: 2 }, change: 200 },
-  ])('finalizes spent=$spent', async ({ spent, counts, change }) => {
+    { spent: 900, returnedAmount: undefined, change: -50 },
+    { spent: 850, returnedAmount: undefined, change: 0 },
+    { spent: 630, returnedAmount: 200, change: 200 },
+  ])('finalizes spent=$spent', async ({ spent, returnedAmount, change }) => {
     const r = await issue();
     await expense(r.id, spent);
     await transition(r.id, 'settle', {}, gs);
@@ -455,13 +453,13 @@ integration('Petty Cash MySQL financial workflow', () => {
     const result = await transition(
       r.id,
       'finalize',
-      { ...(counts ? { denominations: counts } : {}) },
+      { ...(returnedAmount !== undefined ? { returnedAmount } : {}) },
       finance,
       randomUUID(),
     );
     expect((await fund.fund()).currentExpectedBalance).toBe(before + change);
     expect(result.status).toBe('closed');
-    if (counts) expect(result.returns![0].difference).toBe(-20);
+    if (returnedAmount !== undefined) expect(result.returns![0].difference).toBe(-20);
   });
   test('amount changes need a reason; editing and ownership enforced', async () => {
     const r = await create(5000);
@@ -536,13 +534,13 @@ integration('Petty Cash MySQL financial workflow', () => {
     const issued = await issue(10);
     await transition(issued.id, 'settle', {}, gs);
     await expect(
-      transition(issued.id, 'finalize', { denominations: { note10: 1 } }, gs, randomUUID()),
+      transition(issued.id, 'finalize', { returnedAmount: 10 }, gs, randomUUID()),
     ).rejects.toMatchObject({ status: 403 });
     await expect(
       transition(
         issued.id,
         'finalize',
-        { denominations: { note10: 1 } },
+        { returnedAmount: 10 },
         {
           ...gs,
           roles: ['GS_REQUESTER', 'FINANCE_STAFF'],
@@ -561,8 +559,8 @@ integration('Petty Cash MySQL financial workflow', () => {
     await expense(r.id, 50);
     await transition(r.id, 'settle', {}, gs);
     const results = await Promise.allSettled([
-      transition(r.id, 'finalize', { denominations: { note50: 1 } }, finance, randomUUID()),
-      transition(r.id, 'finalize', { denominations: { note50: 1 } }, finance, randomUUID()),
+      transition(r.id, 'finalize', { returnedAmount: 50 }, finance, randomUUID()),
+      transition(r.id, 'finalize', { returnedAmount: 50 }, finance, randomUUID()),
     ]);
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     expect(
@@ -682,10 +680,7 @@ integration('Petty Cash MySQL financial workflow', () => {
     }
   });
   test('history search, report completeness, ledger invariant and role inbox isolation', async () => {
-    const history = await requests.list(
-      { status: 'closed', q: 'TEST-DYN', sort: 'closedAt' },
-      gs,
-    );
+    const history = await requests.list({ status: 'closed', q: 'TEST-DYN', sort: 'closedAt' }, gs);
     expect(history.total).toBeGreaterThan(0);
     expect(history.data.every((r) => r.status === 'closed')).toBe(true);
     const stats = await statistics.stats();
@@ -702,6 +697,21 @@ integration('Petty Cash MySQL financial workflow', () => {
     expect(gsInbox.data.every((n) => n.recipientId === gs.id)).toBe(true);
     const managerInbox = await notifications.notifications({}, manager);
     expect(managerInbox.data.some((n) => n.audience === 'GS_MANAGER')).toBe(true);
+  });
+  test('requests.list and requests.history list every requester’s requests for holders of the permission', async () => {
+    const r = await create();
+    const seenByManager = await requests.list({}, manager);
+    expect(seenByManager.data.some((row) => row.id === r.id)).toBe(true);
+    const seenInHistory = await requests.history({ status: 'closed' }, finance);
+    expect(seenInHistory.data.every((row) => row.status === 'closed')).toBe(true);
+  });
+  test('a non-owner holding requests.list, requests.history, approvals.list or disbursements.list can open another requester’s detail', async () => {
+    const r = await create();
+    await expect(requests.get(r.id, manager)).resolves.toMatchObject({ id: r.id });
+    await expect(requests.get(r.id, finance)).resolves.toMatchObject({ id: r.id });
+    await expect(
+      requests.get(r.id, { ...gs, id: 'no-permission', permissions: [] }),
+    ).rejects.toMatchObject({ status: 403 });
   });
 });
 describe('MPAO boundary and exact money', () => {

@@ -76,7 +76,7 @@ describe('list pagination and filters', () => {
   });
 
   test.each(['list', 'history'] as const)(
-    "Requests %s only returns the caller's own requests",
+    'Requests %s lists every requester’s requests, like GS Approvals and the Finance Desk',
     async (method) => {
       const records = { list: jest.fn() };
       const service = new RequestsService(
@@ -87,9 +87,11 @@ describe('list pagination and filters', () => {
         null!,
         null!,
       );
-      await service[method]({ requesterId: 'someone-else', mine: 'false', page: '2' }, actor);
+      await service[method]({ requesterId: 'someone-else', page: '2' }, actor);
       expect(records.list).toHaveBeenCalledWith(
-        expect.objectContaining({ mine: 'true', requesterId: undefined, page: '2' }),
+        method === 'history'
+          ? { requesterId: 'someone-else', page: '2', status: 'closed', sort: 'closedAt' }
+          : { requesterId: 'someone-else', page: '2' },
         actor,
       );
     },
@@ -98,6 +100,8 @@ describe('list pagination and filters', () => {
   test.each([
     ['requester', [], 'requester', 200],
     ['someone-else', [], 'requester', 403],
+    ['someone-else', ['requests.list'], 'requester', 200],
+    ['someone-else', ['requests.history'], 'requester', 200],
     ['someone-else', ['approvals.list'], 'requester', 200],
     ['someone-else', ['disbursements.list'], 'requester', 200],
   ] as const)(

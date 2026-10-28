@@ -478,10 +478,17 @@
 
           <div v-else class="space-y-1.5">
             <PoTypography size="xs" variant="dimmed" class="block">
-              Count the MVR {{ formatMoney(balanceToReturn) }} handed back by
+              Enter the MVR {{ formatMoney(balanceToReturn) }} handed back by
               {{ request.requester.name }}.
             </PoTypography>
-            <BanknoteCounter v-model="returnCounts" :expected="balanceToReturn" />
+            <PoInputField
+              v-model="returnedAmount"
+              label="Cash returned (MVR)"
+              type="number"
+              :min="0"
+              placeholder="0.00"
+              required
+            />
           </div>
           <PoInputField
             v-model="closeDynamicsRef"
@@ -510,7 +517,7 @@
             :action-type="hasReturnDiscrepancy ? 'orange' : 'default'"
             size="sm"
             :icon="ArchiveBoxIcon"
-            :disabled="store.busy || (balanceToReturn > 0 && !hasReturnCount)"
+            :disabled="store.busy || (balanceToReturn > 0 && !hasReturnAmount)"
             @button-click="handleConfirmFinalize"
           />
         </div>
@@ -610,13 +617,12 @@
 
 <script setup lang="ts">
 import PageSkeleton from '~/components/petty-cash/PageSkeleton.vue';
-import { cashDifference, cashSum, denominationTotal, emptyDenominationCounts  } from '~/utils/pettyCashStatus';
+import { cashDifference, cashSum } from '~/utils/pettyCashStatus';
 import { formatDate, formatMoney } from '~/utils/pettyCashFormat';
 
 import { computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import BackButton from '~/components/backButton.vue';
-import BanknoteCounter from '~/components/petty-cash/BanknoteCounter.vue';
 import NotifyCollectionModal from '~/components/petty-cash/NotifyCollectionModal.vue';
 import PettyCashRequestModal from '~/components/petty-cash/PettyCashRequestModal.vue';
 import BulkReceiptsModal from '~/components/petty-cash/BulkReceiptsModal.vue';
@@ -854,10 +860,11 @@ const showPrepareModal = ref(false);
 
 // Finalize & close with cash count (Finance)
 const showFinalizeModal = ref(false);
-const returnCounts = ref(emptyDenominationCounts());
-const hasReturnCount = computed(() => Object.values(returnCounts.value).some((v) => v !== ''));
-const countedReturn = computed(() => denominationTotal(returnCounts.value));
-const returnDifference = computed(() => cashDifference(countedReturn.value, balanceToReturn.value));
+const returnedAmount = ref<number | ''>('');
+const hasReturnAmount = computed(() => returnedAmount.value !== '');
+const returnDifference = computed(() =>
+  cashDifference(Number(returnedAmount.value) || 0, balanceToReturn.value),
+);
 const hasReturnDiscrepancy = computed(
   () => balanceToReturn.value > 0 && returnDifference.value !== 0,
 );
@@ -870,19 +877,17 @@ const finalizeLabel = computed(() => {
 const closeDynamicsRef = ref('');
 
 function openFinalizeModal() {
-  returnCounts.value = emptyDenominationCounts();
+  returnedAmount.value = '';
   closeDynamicsRef.value = request.value?.dynamicsReference || '';
   showFinalizeModal.value = true;
 }
 
 async function handleConfirmFinalize() {
-  if (balanceToReturn.value > 0 && !hasReturnCount.value) return;
+  if (balanceToReturn.value > 0 && !hasReturnAmount.value) return;
   try {
     if (!request.value) return;
     await store.finalizeRequest(request.value.id, {
-      denominations: Object.fromEntries(
-        Object.entries(returnCounts.value).map(([k, v]) => [k, Number(v) || 0]),
-      ),
+      returnedAmount: balanceToReturn.value > 0 ? Number(returnedAmount.value) || 0 : undefined,
       dynamicsReference: closeDynamicsRef.value.trim() || undefined,
     });
     showFinalizeModal.value = false;

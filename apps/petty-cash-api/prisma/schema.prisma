@@ -121,7 +121,7 @@ model CashReturn {
   expectedAmount Decimal      @map("expected_amount") @db.Decimal(14, 2)
   actualAmount   Decimal      @map("actual_amount") @db.Decimal(14, 2)
   difference     Decimal      @map("difference") @db.Decimal(14, 2)
-  denominations  Json         @map("denominations")
+  denominations  Json?        @map("denominations")
   receivedBy     String       @map("received_by")
   returnedBy     String       @map("returned_by")
   returnDate     DateTime     @default(now()) @map("return_date")

@@ -15,9 +15,9 @@ The script upserts all 34 permission definitions and two roles:
 | Role | Pages | Workflow actions |
 | --- | --- | --- |
 | Petty Cash Request Role | Requests, GS Approvals, History | Create/edit own requests, confirm own cash collection, add/remove receipts (including bulk and optional AI), settle, authorize/reject requests, view history and request details |
-| Petty Cash Finance Role | Finance Desk, Reconciliation, Ledger, Settings | Manage requester/approver staff, prepare/notify collection, send reminders, return settlement for correction, finalize/close, record vault counts, resolve discrepancies with or without adjustment, top-ups, ledger and reconciliation reports |
+| Petty Cash Finance Role | Finance Desk, History, Reconciliation, Ledger, Settings | Manage requester/approver staff, prepare/notify collection, send reminders, return settlement for correction, finalize/close, record vault counts, resolve discrepancies with or without adjustment, top-ups, ledger and reconciliation reports |
 
-Both include `requests.get`, `files.download`, `notifications.list`, `notifications.markread` and `statistics.get`. These support details, attachments, notifications and dashboard statistics. The Request role has 18 permissions; Finance has 21. A user assigned both receives the union.
+Both include `requests.get`, `files.download`, `notifications.list`, `notifications.markread` and `statistics.get`. These support details, attachments, notifications and dashboard statistics. The Request role has 18 permissions; Finance has 22. A user assigned both receives the union.
 
 The source templates are `ROLE_PERMISSION_GROUPS` in `apps/petty-cash-api/src/auth/permissions.ts`; tests compare them with SQL memberships. `permissions.json` remains the Bifrost permission-import manifest.
 
@@ -38,9 +38,9 @@ The sidebar and direct page entry require the following permissions, all prefixe
 | Reconciliation | `vaultcounts.list` | `GET /vault-counts` |
 | Ledger | `fund.transactions` | `GET /fund/transactions` |
 
-The three new permissions are `approvals.list`, `disbursements.list`, and `requests.history`. Deploy the updated catalog and role memberships alongside the API/UI changes. Existing action-only permissions do not reveal pages. Request details use `requests.get`; viewing does not grant mutations. Finance users landing on `/` are sent to their first available page, normally Finance Desk. Denied direct links show an access message without loading business data.
+The three new permissions are `approvals.list`, `disbursements.list`, and `requests.history`; Finance now also holds `requests.history`, so Finance sees History alongside Finance Desk. Deploy the updated catalog and role memberships alongside the API/UI changes. Existing action-only permissions do not reveal pages. Request details use `requests.get`; viewing does not grant mutations. Finance users landing on `/` are sent to their first available page, normally Finance Desk. Denied direct links show an access message without loading business data.
 
-Approvals reads always filter pending approval; History always filters closed requests. Finance reads accept only the four desk tabs' statuses. Existing mutation URLs are unchanged. API guards enforce view and mutation permissions independently of the UI.
+Requests, History, GS Approvals and the Finance Desk all list every requester's requests to any actor holding the matching view permission, filtered only by status, not by who created the request; `GET /requests/:id` is limited to the creator and holders of `requests.list`, `requests.history`, `approvals.list` or `disbursements.list`. Approvals reads always filter pending approval; History always filters closed requests. Finance reads accept only the four desk tabs' statuses. Existing mutation URLs are unchanged. API guards enforce view and mutation permissions independently of the UI. Ownership of edit and cash-collection actions is unaffected by list visibility: only the request's creator can edit a pending request or confirm receipt of disbursed cash (see `allowedActions` in `common/request-policy.ts`).
 
 ## Receipt permissions
 
@@ -48,6 +48,6 @@ Approvals reads always filter pending approval; History always filters closed re
 
 ## Settings staff lists
 
-`staffassignments.list` controls the Settings sidebar and direct route. `staffassignments.lookup`, `staffassignments.add` and `staffassignments.remove` control the corresponding operations. All four use the `petty-cash.` prefix and standard identity/entity/permission guards. The provisioning SQL grants all four to the Finance role; the Request role receives none. The role counts are 18 for Request and 21 for Finance.
+`staffassignments.list` controls the Settings sidebar and direct route. `staffassignments.lookup`, `staffassignments.add` and `staffassignments.remove` control the corresponding operations. All four use the `petty-cash.` prefix and standard identity/entity/permission guards. The provisioning SQL grants all four to the Finance role; the Request role receives none. The role counts are 18 for Request and 22 for Finance.
 
 `GET /access` reports only the caller’s active requester/approver eligibility alongside roles and capabilities. The frontend intersects this with permission/state/ownership-based allowed actions. Removing an assignment removes frontend action eligibility; it does not change Bifrost permissions or backend business authorization. See [staff settings](STAFF_SETTINGS.md) for rollout and setup.

@@ -47,7 +47,7 @@ INSERT INTO petty_permission_catalog (subject, action, suffix, request_role, fin
   ('statistics', 'get', 'statistics.get', 1, 1),
   ('reports', 'reconciliation', 'reports.reconciliation', 0, 1),
   ('ocr', 'receipt', 'ocr.receipt', 1, 0),
-  ('requests', 'history', 'requests.history', 1, 0),
+  ('requests', 'history', 'requests.history', 1, 1),
   ('approvals', 'list', 'approvals.list', 1, 0),
   ('disbursements', 'list', 'disbursements.list', 0, 1);
 

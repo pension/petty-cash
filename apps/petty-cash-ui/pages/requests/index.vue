@@ -46,6 +46,7 @@
             :meta="
               [
                 item.id,
+                item.requester.name,
                 `Closed ${formatDate(item.closedAt || item.updatedAt)}`,
                 item.dynamicsReference,
               ]
@@ -169,6 +170,7 @@ async function changePage(page: number) {
 const columns: ListColumn[] = [
   { label: 'Closed', width: '6rem' },
   { label: 'Voucher no', width: '7.5rem' },
+  { label: 'Requester', width: '8rem' },
   { label: 'Particulars' },
   { label: 'Petty cash (MVR)', width: '7rem', align: 'right' },
   { label: 'Dynamics ref', width: '8rem' },
@@ -179,6 +181,7 @@ function cells(item: PettyCashRequest): ListCell[] {
   return [
     { text: formatDate(item.closedAt || item.updatedAt), class: 'tabular-nums' },
     { text: item.id, to: `/requests/${item.id}` },
+    { text: item.requester.name },
     { text: item.purpose, wrap: true },
     {
       text: formatMoney(pettyCashAmount(item)),
