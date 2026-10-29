@@ -66,6 +66,7 @@ describe('staff directory gRPC client', () => {
           email: call.request.email,
           designation: 'Officer',
           department: '',
+          blink_id: call.request.email === 'no-blink@example.test' ? '' : 'u-c-test-blink-id',
         });
       },
     });
@@ -102,6 +103,12 @@ describe('staff directory gRPC client', () => {
       email: 'staff@example.test',
       designation: 'Officer',
       department: '',
+      blinkId: 'u-c-test-blink-id',
+    });
+  });
+  test('treats an empty blink_id as unset rather than a literal empty string', async () => {
+    await expect(service.findByEmail('no-blink@example.test')).resolves.toMatchObject({
+      blinkId: null,
     });
   });
   test('returns useful not-found and ambiguous-email errors', async () => {

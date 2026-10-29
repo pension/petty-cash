@@ -31,7 +31,7 @@ yarn lint
 yarn workspace petty-cash-api test --runInBand
 ```
 
-Set `PETTY_CASH_TEST_DATABASE_URL=mysql://.../petty_cash_test` for database integration tests. Use a dedicated test database; tests append activity and must never target production. Apply the same migrations to it first. Tests cover cash paths, audit immutability, concurrency, idempotency, every endpoint’s MPAO boundary, streamed bytes, bounded buffering, upload failure cleanup and retention of receipt evidence.
+Set `PETTY_CASH_TEST_DATABASE_URL=mysql://.../petty_cash_test` for database integration tests. Use a dedicated test database; tests append activity and must never target production. Apply the same migrations to it first. `COMMON_GRPC_URL` must also be set (any reachable value, e.g. `127.0.0.1:1`) for the suite to boot — it only needs the employee directory module to construct, not to actually answer calls. Tests cover cash paths, audit immutability, concurrency, idempotency, every endpoint’s MPAO boundary, streamed bytes, bounded buffering, upload failure cleanup and retention of receipt evidence.
 
 ## Media storage
 

@@ -2156,10 +2156,10 @@
     znv "^0.4.0"
     zod "^3.23.6"
 
-"@pension/proto@0.1.8":
-  version "0.1.8"
-  resolved "https://npm.pkg.github.com/download/@pension/proto/0.1.8/c8c5ba7babd2905605b3ad80480deee264a5c763#c8c5ba7babd2905605b3ad80480deee264a5c763"
-  integrity sha512-dJ60E8DmyHqVGTzaeMH80k/J4FSwzpvxhqoYpic1tbHyjMkNJNeGCrJp1ygEk7JigiahLROZ30KOoy1IWW6/Lg==
+"@pension/proto@0.1.15":
+  version "0.1.15"
+  resolved "https://npm.pkg.github.com/download/@pension/proto/0.1.15/6aa87a47214eecabad0064d83b65f7615f28387c#6aa87a47214eecabad0064d83b65f7615f28387c"
+  integrity sha512-l8W4zpJA6r5KpR+B8bIaUnoTV+zZMx1qP2vtiPFLvijtXj78cq6aemgSI0okRnfRrMKSySl10rOzy0ltrp0qpQ==
   dependencies:
     "@grpc/grpc-js" "^1.12.5"
     "@nestjs/common" "^10.2.7"

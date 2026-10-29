@@ -349,6 +349,23 @@ export const usePettyCashStore = defineStore('pettyCash', () => {
       listPageSize.value = result.pageSize;
     });
   }
+  // Fetches every matching row for export, independent of the displayed page/list state.
+  async function fetchAllHistory(filters: ListQuery, endpoint = '/requests/history') {
+    const pageSize = 100;
+    const all: PettyCashSummary[] = [];
+    for (let page = 1; ; page++) {
+      const query: ListQuery = { ...filters, page, pageSize };
+      const search = new URLSearchParams(
+        Object.entries(query)
+          .filter(([, value]) => value !== undefined && value !== '')
+          .map(([name, value]) => [name, String(value)]),
+      );
+      const result = await read<Page<PettyCashSummary>>(`${endpoint}?${search}`);
+      all.push(...result.data.map(visibleRequest));
+      if (all.length >= result.total || result.data.length === 0) break;
+    }
+    return all;
+  }
   async function fetchTransactions(page = 1) {
     await loadList<FundTransaction>(
       'transactions',
@@ -728,6 +745,7 @@ export const usePettyCashStore = defineStore('pettyCash', () => {
     initialize,
     reset,
     fetchRequests,
+    fetchAllHistory,
     fetchRequest,
     fetchTransactions,
     fetchCounts,

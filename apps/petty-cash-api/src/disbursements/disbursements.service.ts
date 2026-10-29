@@ -7,6 +7,7 @@ import { RequestWorkflowService } from '../common/request-workflow.service';
 import { parse } from '../common/validation';
 import { LedgerService } from '../ledger/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { BlinkNotificationsService } from './blink-notifications.service';
 import { ConfirmReceiptSchema } from './dto/confirm-receipt.dto';
 import { HandOverSchema } from './dto/hand-over.dto';
 import { NotifyCollectionSchema } from './dto/notify-collection.dto';
@@ -22,6 +23,7 @@ export class DisbursementsService {
     private readonly ledger: LedgerService,
     private readonly records: RequestRecordsService,
     private readonly db: PrismaService,
+    private readonly blink: BlinkNotificationsService,
   ) {}
   list(q: ListQuery, a: Actor) {
     const statuses = [
@@ -39,7 +41,8 @@ export class DisbursementsService {
   }
   async notifyCollection(id: string, body: unknown, a: Actor) {
     const d = parse(NotifyCollectionSchema, body);
-    return this.workflow.run(id, 'notifyCollection', d, a, (_tx, r) => {
+    let requesterEmail = '';
+    const result = await this.workflow.run(id, 'notifyCollection', d, a, (_tx, r) => {
       const update: Prisma.PettyCashRequestUpdateInput = {};
       if (!r.requestedAmount.equals(d.amount) && !d.reason)
         throw new BadRequestException({
@@ -51,11 +54,18 @@ export class DisbursementsService {
       update.approvedAmount = d.amount;
       update.preparedBy = a.name;
       update.preparedById = a.id;
+      requesterEmail = (r.requester as { email: string }).email;
       const type = 'finance_processed';
       const title = 'Cash Prepared for Collection';
       const description = `MVR ${d.amount}; requested MVR ${r.requestedAmount.toString()}.${d.reason ? ' Reason: ' + d.reason : ''}`;
       return { update, type, title, description };
     });
+    // Fire-and-forget: a Blink delivery failure must never fail this response.
+    this.blink.notify(
+      requesterEmail,
+      `Your petty cash request ${id} for MVR ${d.amount} is ready for collection at Finance.`,
+    );
+    return result;
   }
   async confirmReceipt(id: string, body: unknown, a: Actor, key?: string) {
     const d = parse(ConfirmReceiptSchema, body);
@@ -108,7 +118,7 @@ export class DisbursementsService {
     if (!target) throw new BadRequestException('Select an active requester to hand over to.');
     if (target.employeeId === a.entityId)
       throw new BadRequestException('You already hold this cash.');
-    return this.workflow.run(id, 'handOver', d, a, (_tx, r) => ({
+    const result = await this.workflow.run(id, 'handOver', d, a, (_tx, r) => ({
       update: {
         pendingCustodianEmployeeId: target.employeeId,
         pendingCustodianName: target.name,
@@ -118,6 +128,12 @@ export class DisbursementsService {
       title: 'Cash Hand-over Offered',
       description: `${a.name} offered to hand MVR ${r.totalCashIssued.toString()} to ${target.name}.${d.note ? ' Note: ' + d.note : ''}`,
     }));
+    // Fire-and-forget: a Blink delivery failure must never fail this response.
+    this.blink.notify(
+      target.email,
+      `${a.name} wants to hand you MVR ${result.totalCashIssued} in petty cash for request ${id}. Accept it once you have the cash.`,
+    );
+    return result;
   }
   async acceptHandover(id: string, body: unknown, a: Actor) {
     const d = parse(AcceptHandoverSchema, body);

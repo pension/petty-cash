@@ -177,6 +177,7 @@ describe('list pagination and filters', () => {
       null!,
       records as unknown as RequestRecordsService,
       null!,
+      null!,
     );
     await service.list({ status, page: '2' }, actor);
     expect(records.list).toHaveBeenCalledWith({ status, page: '2' }, actor);

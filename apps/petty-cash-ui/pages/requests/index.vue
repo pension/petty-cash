@@ -26,6 +26,15 @@
           <div class="shrink-0">
             <PoDateRangePicker v-model="dateRange" @update:model-value="loadHistory(1)" />
           </div>
+          <div class="shrink-0">
+            <PoButton
+              action-type="ghost"
+              :label="isFiltered ? 'Download filtered' : 'Download all'"
+              :icon="ArrowDownTrayIcon"
+              :disabled="store.busy || downloadingList"
+              @button-click="handleDownloadList"
+            />
+          </div>
           <div class="hidden sm:flex shrink-0 items-center gap-3">
             <span class="hidden lg:block border-l border-slate-300 h-4 w-px ml-1" />
             <PoPagination
@@ -115,6 +124,7 @@ import ListRow, { type ListCell } from '~/components/petty-cash/ListRow.vue';
 import ListTable, { type ListColumn } from '~/components/petty-cash/ListTable.vue';
 import { usePettyCashStore } from '~/stores/usePettyCashStore';
 import type { PettyCashSummary as PettyCashRequest } from '~/types/pettyCash';
+import { downloadHistoryCsv } from '~/utils/pettyCashCsv';
 import { downloadRequestPdf } from '~/utils/pettyCashPdf';
 import { pettyCashAmount } from '~/utils/pettyCashStatus';
 
@@ -142,6 +152,7 @@ const closedRequests = computed(() => store.allRequests);
 const filteredRequests = closedRequests;
 const paginatedRequests = closedRequests;
 const totalPages = computed(() => Math.ceil(store.listTotal / itemsPerPage) || 1);
+const isFiltered = computed(() => !!searchQuery.value.trim() || !!dateRange.value);
 async function loadHistory(page: number) {
   try {
     await store.fetchRequests(
@@ -204,6 +215,33 @@ function cells(item: PettyCashRequest): ListCell[] {
       class: item.dynamicsReference ? 'font-mono text-xs' : 'text-slate-400',
     },
   ];
+}
+
+const downloadingList = ref(false);
+
+async function handleDownloadList() {
+  if (downloadingList.value) return;
+  downloadingList.value = true;
+  try {
+    const rows = await store.fetchAllHistory({
+      status: 'closed',
+      sort: 'closedAt',
+      order: 'desc',
+      q: searchQuery.value.trim() || undefined,
+      from: dateRange.value?.from || undefined,
+      to: dateRange.value?.to || undefined,
+    });
+    if (rows.length === 0) {
+      showToast('No closed requests match this filter.', 'info');
+      return;
+    }
+    const suffix = isFiltered.value ? 'filtered' : 'all';
+    downloadHistoryCsv(rows, `petty-cash-history-${suffix}-${new Date().toISOString().slice(0, 10)}.csv`);
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : 'Could not download the list.', 'error');
+  } finally {
+    downloadingList.value = false;
+  }
 }
 
 const downloadingId = ref<string | null>(null);

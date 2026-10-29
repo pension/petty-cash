@@ -20,6 +20,7 @@ const employeeSchema = z.object({
   email: z.string().trim().email().max(254),
   designation: z.string().max(191),
   department: z.string().max(191),
+  blink_id: z.string().max(100),
 });
 
 @Injectable()
@@ -58,6 +59,7 @@ export class StaffDirectoryService {
         email: result.email.toLowerCase(),
         designation: result.designation,
         department: result.department,
+        blinkId: result.blink_id || null,
       };
     } catch (error) {
       const code = (error as { code?: number })?.code;
