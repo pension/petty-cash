@@ -226,17 +226,19 @@ model IdempotencyRecord {
 }
 
 model Notification {
-  id          String             @id @default(uuid()) @map("id") @db.VarChar(40)
-  title       String             @map("title")
-  text        String             @map("text") @db.Text
-  recipientId String?            @map("recipient_id") @db.VarChar(100)
-  audience    String?            @map("audience")
-  url         String             @map("url")
-  dedupeKey   String             @unique @map("dedupe_key")
-  createdAt   DateTime           @default(now()) @map("created_at")
-  reads       NotificationRead[]
+  id                String             @id @default(uuid()) @map("id") @db.VarChar(40)
+  title             String             @map("title")
+  text              String             @map("text") @db.Text
+  recipientId       String?            @map("recipient_id") @db.VarChar(100)
+  recipientEntityId Int?               @map("recipient_entity_id") @db.UnsignedInt
+  audience          String?            @map("audience")
+  url               String             @map("url")
+  dedupeKey         String             @unique @map("dedupe_key")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  reads             NotificationRead[]
 
   @@index([recipientId, createdAt])
+  @@index([recipientEntityId, createdAt])
   @@map("notifications")
 }
 
@@ -281,4 +283,12 @@ model StaffAssignment {
   @@index([employeeId, removedAt])
   @@index([type, removedAt, addedAt])
   @@map("staff_assignments")
+}
+
+model BlinkIdentity {
+  email     String   @id @map("email") @db.VarChar(254)
+  blinkId   String?  @map("blink_id") @db.VarChar(100)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("blink_identities")
 }

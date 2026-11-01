@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { IdentityService } from '@pension/midgard';
 import { NOTIFICATIONS_URL } from '../../env';
+import { PrismaService } from '../prisma/prisma.service';
 import { StaffDirectoryService } from '../staff-directory/staff-directory.service';
 
 const BLINK_USER_NOTIFICATION_TYPE = 7;
@@ -10,9 +11,11 @@ const BLINK_USER_NOTIFICATION_TYPE = 7;
  * never fail the business action it's attached to, so every method swallows its
  * own errors and only logs a diagnostic reason (never email/name/body content).
  *
- * The recipient's Blink user ID comes straight from the existing employee directory
- * lookup (StaffDirectoryService.findByEmail), which resolves by email alone and so
- * works for anyone — not just GS staff with a staff_assignments entry.
+ * The recipient's Blink user ID comes from the employee directory lookup
+ * (StaffDirectoryService.findByEmail), which resolves by email alone and so
+ * works for anyone — not just GS staff with a staff_assignments entry. Resolved
+ * ids are cached in blink_identities so repeat notifications to the same email
+ * skip the Common Service gRPC call.
  */
 @Injectable()
 export class BlinkNotificationsService {
@@ -20,6 +23,7 @@ export class BlinkNotificationsService {
   constructor(
     private readonly identity: IdentityService,
     private readonly directory: StaffDirectoryService,
+    private readonly db: PrismaService,
   ) {}
 
   notify(email: string, body: string): void {
@@ -33,8 +37,10 @@ export class BlinkNotificationsService {
   }
 
   private async send(email: string, body: string) {
-    const employee = await this.directory.findByEmail(email);
-    if (!employee.blinkId) return;
+    const normalizedEmail = email.toLowerCase();
+    const cached = await this.db.blinkIdentity.findUnique({ where: { email: normalizedEmail } });
+    const blinkId = cached ? cached.blinkId : await this.resolveAndCache(normalizedEmail);
+    if (!blinkId) return;
     await this.identity.makeRequest(
       `${NOTIFICATIONS_URL}/api/notifications`,
       'POST',
@@ -44,9 +50,19 @@ export class BlinkNotificationsService {
         body,
         priority_id: 3,
         hidden: true,
-        recipients: [employee.blinkId],
+        recipients: [blinkId],
         tags: ['petty-cash'],
       },
     );
+  }
+
+  private async resolveAndCache(email: string) {
+    const employee = await this.directory.findByEmail(email);
+    await this.db.blinkIdentity.upsert({
+      where: { email },
+      create: { email, blinkId: employee.blinkId },
+      update: { blinkId: employee.blinkId },
+    });
+    return employee.blinkId;
   }
 }

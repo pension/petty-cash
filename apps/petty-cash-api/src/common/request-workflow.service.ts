@@ -66,7 +66,6 @@ export class RequestWorkflowService {
         edit: 'GS_MANAGER',
         authorize: 'FINANCE_STAFF',
         settle: 'FINANCE_STAFF',
-        handOver: 'GS_REQUESTER',
       };
       if (audiences[action])
         await this.notifications.create(tx, title, description, `/requests/${id}`, {
@@ -84,6 +83,10 @@ export class RequestWorkflowService {
       )
         await this.notifications.create(tx, title, description, `/requests/${id}`, {
           recipientId: request.requesterId,
+        });
+      if (action === 'handOver' && update.pendingCustodianEmployeeId)
+        await this.notifications.create(tx, title, description, `/requests/${id}`, {
+          recipientEntityId: update.pendingCustodianEmployeeId as number,
         });
       return this.records.get(id, actor, tx);
     };

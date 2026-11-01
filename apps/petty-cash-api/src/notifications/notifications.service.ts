@@ -40,6 +40,7 @@ export class NotificationsService {
             in: [...a.roles, ...(a.roles.includes('FINANCE_SUPERVISOR') ? ['FINANCE_STAFF'] : [])],
           },
         },
+        ...(a.entityId != null ? [{ recipientEntityId: a.entityId }] : []),
       ],
     };
   }
