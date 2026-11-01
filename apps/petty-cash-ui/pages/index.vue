@@ -51,7 +51,7 @@
               <template
                 v-if="
                   item.allowedActions.some((a) =>
-                    ['edit', 'confirmReceipt', 'addExpense'].includes(a),
+                    ['edit', 'confirmReceipt', 'addExpense', 'acceptHandover'].includes(a),
                   )
                 "
                 #actions
@@ -73,6 +73,24 @@
                   :disabled="store.busy"
                   @button-click="handleConfirmReceived(item)"
                 />
+                <template v-else-if="item.allowedActions.includes('acceptHandover')">
+                  <PoButton
+                    v-if="item.allowedActions.includes('declineHandover')"
+                    size="sm"
+                    action-type="ghost"
+                    label="Decline"
+                    :icon="XCircleIcon"
+                    :disabled="store.busy"
+                    @button-click="handleDeclineHandover(item)"
+                  />
+                  <PoButton
+                    size="sm"
+                    label="Accept hand-over"
+                    :icon="CheckBadgeIcon"
+                    :disabled="store.busy"
+                    @button-click="handleAcceptHandover(item)"
+                  />
+                </template>
                 <PoButton
                   v-else
                   size="sm"
@@ -118,9 +136,11 @@ import { useRouter } from 'vue-router';
 import {
   ArrowRightIcon,
   BanknotesIcon,
+  CheckBadgeIcon,
   CheckIcon,
   PencilSquareIcon,
   PlusIcon,
+  XCircleIcon,
 } from '@heroicons/vue/20/solid';
 import {
   PoButton,
@@ -162,6 +182,24 @@ async function handleConfirmReceived(req: PettyCashRequest) {
   try {
     await store.collectCash(req.id);
     showToast(`Receipt of MVR ${formatMoney(pettyCashAmount(req))} confirmed`, 'success');
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : 'Could not complete this action.', 'error');
+  }
+}
+
+async function handleAcceptHandover(req: PettyCashRequest) {
+  try {
+    await store.acceptHandover(req.id);
+    showToast('Cash custody accepted', 'success');
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : 'Could not complete this action.', 'error');
+  }
+}
+
+async function handleDeclineHandover(req: PettyCashRequest) {
+  try {
+    await store.declineHandover(req.id);
+    showToast('Hand-over declined', 'info');
   } catch (err) {
     showToast(err instanceof Error ? err.message : 'Could not complete this action.', 'error');
   }

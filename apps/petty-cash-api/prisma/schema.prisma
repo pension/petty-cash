@@ -292,3 +292,18 @@ model BlinkIdentity {
 
   @@map("blink_identities")
 }
+
+model BlinkNotificationLog {
+  id        String   @id @default(uuid()) @map("id") @db.VarChar(40)
+  requestId String?  @map("request_id") @db.VarChar(40)
+  email     String   @map("email") @db.VarChar(254)
+  body      String   @map("body") @db.Text
+  status    String   @default("pending") @map("status") @db.VarChar(20)
+  error     String?  @map("error") @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@index([requestId])
+  @@map("blink_notification_logs")
+}

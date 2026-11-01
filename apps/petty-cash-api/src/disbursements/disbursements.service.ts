@@ -64,6 +64,7 @@ export class DisbursementsService {
     this.blink.notify(
       requesterEmail,
       `Your petty cash request ${id} for MVR ${d.amount} is ready for collection at Finance.`,
+      id,
     );
     return result;
   }
@@ -132,6 +133,7 @@ export class DisbursementsService {
     this.blink.notify(
       target.email,
       `${a.name} wants to hand you MVR ${result.totalCashIssued} in petty cash for request ${id}. Accept it once you have the cash.`,
+      id,
     );
     return result;
   }
