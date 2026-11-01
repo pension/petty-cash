@@ -73,24 +73,14 @@
                   :disabled="store.busy"
                   @button-click="handleConfirmReceived(item)"
                 />
-                <template v-else-if="item.allowedActions.includes('acceptHandover')">
-                  <PoButton
-                    v-if="item.allowedActions.includes('declineHandover')"
-                    size="sm"
-                    action-type="ghost"
-                    label="Decline"
-                    :icon="XCircleIcon"
-                    :disabled="store.busy"
-                    @button-click="handleDeclineHandover(item)"
-                  />
-                  <PoButton
-                    size="sm"
-                    label="Accept hand-over"
-                    :icon="CheckBadgeIcon"
-                    :disabled="store.busy"
-                    @button-click="handleAcceptHandover(item)"
-                  />
-                </template>
+                <PoButton
+                  v-else-if="item.allowedActions.includes('acceptHandover')"
+                  size="sm"
+                  label="Accept hand-over"
+                  :icon="CheckBadgeIcon"
+                  :disabled="store.busy"
+                  @button-click="handleAcceptHandover(item)"
+                />
                 <PoButton
                   v-else
                   size="sm"
@@ -140,7 +130,6 @@ import {
   CheckIcon,
   PencilSquareIcon,
   PlusIcon,
-  XCircleIcon,
 } from '@heroicons/vue/20/solid';
 import {
   PoButton,
@@ -191,15 +180,6 @@ async function handleAcceptHandover(req: PettyCashRequest) {
   try {
     await store.acceptHandover(req.id);
     showToast('Cash custody accepted', 'success');
-  } catch (err) {
-    showToast(err instanceof Error ? err.message : 'Could not complete this action.', 'error');
-  }
-}
-
-async function handleDeclineHandover(req: PettyCashRequest) {
-  try {
-    await store.declineHandover(req.id);
-    showToast('Hand-over declined', 'info');
   } catch (err) {
     showToast(err instanceof Error ? err.message : 'Could not complete this action.', 'error');
   }
