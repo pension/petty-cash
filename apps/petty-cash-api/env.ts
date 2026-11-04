@@ -17,9 +17,11 @@ export const {
   STORAGE_KEY_FILE: z.string().optional(),
   STORAGE_MEDIA_BUCKET: z.string().optional(),
   GCS_RECEIPT_BUCKET: z.string().optional(),
-  // Blink push notifications (non-critical side channel, see disbursements/blink-notifications.service.ts).
-  // Recipient resolution reuses the gRPC employee directory (StaffDirectoryService),
-  // whose EmployeeDetails proto now carries blink_id (@pension/proto >= 0.1.15).
+  // External Notifications API (non-critical side channel), see
+  // common/external-notifications.service.ts: Blink push (notification_type_id 7;
+  // recipient resolution reuses the gRPC employee directory, StaffDirectoryService,
+  // whose EmployeeDetails proto carries blink_id, @pension/proto >= 0.1.15) and
+  // reminder email (notification_type_id 2; uses the recipient's own address directly).
   NOTIFICATIONS_URL: z.string().url().optional(),
 });
 if (FILE_STORAGE === 'gcs' && !STORAGE_MEDIA_BUCKET?.trim() && !GCS_RECEIPT_BUCKET?.trim())

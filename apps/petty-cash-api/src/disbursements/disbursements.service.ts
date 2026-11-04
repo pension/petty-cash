@@ -5,9 +5,9 @@ import { RequestRecordsService } from '../common/request-records.service';
 import type { Actor } from '../auth/actor';
 import { RequestWorkflowService } from '../common/request-workflow.service';
 import { parse } from '../common/validation';
+import { ExternalNotificationsService } from '../common/external-notifications.service';
 import { LedgerService } from '../ledger/ledger.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { BlinkNotificationsService } from './blink-notifications.service';
 import { ConfirmReceiptSchema } from './dto/confirm-receipt.dto';
 import { HandOverSchema } from './dto/hand-over.dto';
 import { NotifyCollectionSchema } from './dto/notify-collection.dto';
@@ -23,7 +23,7 @@ export class DisbursementsService {
     private readonly ledger: LedgerService,
     private readonly records: RequestRecordsService,
     private readonly db: PrismaService,
-    private readonly blink: BlinkNotificationsService,
+    private readonly notifications: ExternalNotificationsService,
   ) {}
   list(q: ListQuery, a: Actor) {
     const statuses = [
@@ -61,7 +61,7 @@ export class DisbursementsService {
       return { update, type, title, description };
     });
     // Fire-and-forget: a Blink delivery failure must never fail this response.
-    this.blink.notify(
+    this.notifications.notifyBlink(
       requesterEmail,
       `Your petty cash request ${id} for MVR ${d.amount} is ready for collection at Finance.`,
       id,
@@ -130,7 +130,7 @@ export class DisbursementsService {
       description: `${a.name} offered to hand MVR ${r.totalCashIssued.toString()} to ${target.name}.${d.note ? ' Note: ' + d.note : ''}`,
     }));
     // Fire-and-forget: a Blink delivery failure must never fail this response.
-    this.blink.notify(
+    this.notifications.notifyBlink(
       target.email,
       `${a.name} wants to hand you MVR ${result.totalCashIssued} in petty cash for request ${id}. Accept it once you have the cash.`,
       id,
