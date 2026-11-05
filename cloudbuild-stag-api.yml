@@ -56,7 +56,7 @@ options:
 substitutions:
   # --- verify every one of these before the first real run ---
   _SERVICE_ACCOUNT: cloudrun@staging-278118.iam.gserviceaccount.com
-  _CLOUD_SQL: mpao-dev-data-services:asia-northeast1:mpao-data-mysql-dev-asia-est1-1a
+  _CLOUD_SQL: mpao-dev-data-services:asia-east1:mpao-data-mysql-dev-asia-est1-1a
   _DEPLOY_REGION: asia-northeast1
   _GCR_HOSTNAME: asia.gcr.io
   _VPC_CONNECTOR: memstore-vpc-1
