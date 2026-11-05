@@ -121,7 +121,7 @@ options:
   substitutionOption: ALLOW_LOOSE
 substitutions:
   _SERVICE_ACCOUNT: prod-cloudrun@production-147011.iam.gserviceaccount.com
-  _CLOUD_SQL: production-147011:asia-east1:prod-mssql-db
+  _CLOUD_SQL: production-147011:asia-northeast1:prod-mssql-db
   _VPC_CONNECTOR: red-connector
   _GCR_HOSTNAME: asia.gcr.io
   _PLATFORM: managed
@@ -130,7 +130,7 @@ substitutions:
   _API_GLOBAL_SECRET: prod-global-nest-env
   _API_ENV_SECRET: mpao-prod-petty-cash-api-prod-secret-global
   _UI_SERVICE_NAME: mpao-prod-petty-cash-ui-run-asia-east-1
-  _DEPLOY_REGION: asia-east1
+  _DEPLOY_REGION: asia-northeast1
   _UI_ENV_SECRET: mpao-prod-petty-cash-ui-secret-asia-east-1
 tags:
   - gcp-cloud-build-deploy-cloud-run

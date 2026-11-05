@@ -56,8 +56,8 @@ options:
 substitutions:
   # --- verify every one of these before the first real run ---
   _SERVICE_ACCOUNT: cloudrun@staging-278118.iam.gserviceaccount.com
-  _CLOUD_SQL: mpao-dev-data-services:asia-east1:mpao-data-mysql-dev-asia-est1-1a
-  _DEPLOY_REGION: asia-east1
+  _CLOUD_SQL: mpao-dev-data-services:asia-northeast1:mpao-data-mysql-dev-asia-est1-1a
+  _DEPLOY_REGION: asia-northeast1
   _GCR_HOSTNAME: asia.gcr.io
   _VPC_CONNECTOR: memstore-asia-east-1
   _LABELS: gcb-trigger-id=4408d5bd-895f-4761-8c73-324722a6fa44
