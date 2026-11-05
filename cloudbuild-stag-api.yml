@@ -59,7 +59,7 @@ substitutions:
   _CLOUD_SQL: mpao-dev-data-services:asia-northeast1:mpao-data-mysql-dev-asia-est1-1a
   _DEPLOY_REGION: asia-northeast1
   _GCR_HOSTNAME: asia.gcr.io
-  _VPC_CONNECTOR: memstore-asia-east-1
+  _VPC_CONNECTOR: memstore-vpc-1
   _LABELS: gcb-trigger-id=4408d5bd-895f-4761-8c73-324722a6fa44
   _TRIGGER_ID: 4408d5bd-895f-4761-8c73-324722a6fa44
   _PLATFORM: managed
