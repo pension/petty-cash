@@ -72,6 +72,11 @@ export class ExternalNotificationsService {
           ? await this.resolveBlinkId(normalizedEmail)
           : normalizedEmail;
       if (!recipient) throw new Error('No Blink identity found for this email.');
+      if (type === NotificationType.email && !extra.replyTo) {
+        throw new Error(
+          'Actor has no email on file; cannot send email notification (reply-to required).',
+        );
+      }
       await this.identity.makeRequest(
         `${NOTIFICATIONS_URL}/api/notifications`,
         'POST',
