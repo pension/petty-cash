@@ -829,4 +829,12 @@ describe('MPAO boundary and exact money', () => {
     expect(actorFrom(user, ['requests.create']).roles).toEqual(['GS_REQUESTER']);
     expect(countTotal({ coin0_10: 3, coin0_1: 1 }).toFixed(2)).toBe('0.31');
   });
+  test('falls back to the staff work email when Bifrost leaves the top-level email blank', () => {
+    const staffUser = {
+      ...user,
+      email: null,
+      staff_detail: { work_email: 'work@example.test' },
+    } as unknown as AuthUser;
+    expect(actorFrom(staffUser, []).email).toBe('work@example.test');
+  });
 });

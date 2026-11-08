@@ -48,7 +48,7 @@ export class NotificationsService {
       requesterEmail,
       'Settlement Reminder',
       `Hi ${requesterName}, this is a reminder to settle petty cash request ${id}. Cash issued: MVR ${cashIssued}. Please log in to Petty Cash to submit your receipts and settle.`,
-      a.email,
+      a.email ?? requesterEmail,
       id,
     );
     return result;

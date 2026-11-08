@@ -51,7 +51,7 @@ export function actorFrom(
     id: user.uuid,
     entityId: user.entity_id,
     name: user.name,
-    email: user.email,
+    email: user.email ?? user.staff_detail?.work_email,
     avatar: user.avatar,
     permissions,
     roles: ROLES.filter((role) =>
