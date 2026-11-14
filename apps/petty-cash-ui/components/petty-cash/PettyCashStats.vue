@@ -9,9 +9,9 @@
 import { computed } from 'vue';
 import { BanknotesIcon, ClockIcon, ScaleIcon, WalletIcon } from '@heroicons/vue/20/solid';
 import { PoStatsBlock } from '@pension/ui-kit';
-import { useFloatStore } from '~/stores/useFloatStore';
+import { usePettyCashStore } from '~/stores/usePettyCashStore';
 
-const store = useFloatStore();
+const store = usePettyCashStore();
 
 const stats = computed(() => [
   {

@@ -1,30 +1,34 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   Prisma,
+  type CashHandover,
   type CashIssuance,
   type CashReturn,
   type Expense,
-  type FloatRequest,
+  type PettyCashRequest,
   type ReceiptFile,
   type TimelineEvent,
 } from '@prisma/client';
 import type { Actor } from '../auth/actor';
 import { PrismaService } from '../prisma/prisma.service';
+import { dateFilter } from './dates';
 import { money } from './money';
 import { pageQuery, type ListQuery } from './pagination';
 import { allowedActions } from './request-policy';
 import { wire } from './serialization';
 import { parse } from './validation';
-export type RequestRecord = FloatRequest & {
+export type RequestRecord = PettyCashRequest & {
   expenses?: (Expense & { file?: ReceiptFile | null })[];
   issuances?: CashIssuance[];
   returns?: CashReturn[];
+  handovers?: CashHandover[];
   timeline?: TimelineEvent[];
 };
 export const requestDetail = {
   expenses: { where: { removedAt: null }, include: { file: true } },
   issuances: true,
   returns: true,
+  handovers: { orderBy: { acceptedAt: 'asc' as const } },
   timeline: { orderBy: { sequence: 'asc' as const } },
 };
 @Injectable()
@@ -63,7 +67,7 @@ export class RequestRecordsService {
     });
   }
   async get(id: string, a: Actor, tx: Prisma.TransactionClient = this.db) {
-    const r = await tx.floatRequest.findUnique({
+    const r = await tx.pettyCashRequest.findUnique({
       where: { id },
       include: requestDetail,
     });
@@ -72,21 +76,23 @@ export class RequestRecordsService {
   }
   async list(q: ListQuery, a: Actor) {
     const { page, pageSize } = parse(pageQuery, q);
+    const search = q.q?.trim();
     const statuses = q.status?.split(',');
-    const where: Prisma.FloatRequestWhereInput = {
+    const where: Prisma.PettyCashRequestWhereInput = {
       ...(statuses ? { status: { in: statuses } } : {}),
       ...(q.mine === 'true'
         ? { requesterId: a.id }
         : q.requesterId
           ? { requesterId: q.requesterId }
           : {}),
-      ...(q.q
+      ...dateFilter(q, 'closedAt'),
+      ...(search
         ? {
             OR: [
-              { id: { contains: q.q } },
-              { purpose: { contains: q.q } },
-              { dynamicsReference: { contains: q.q } },
-              { requester: { path: '$.name', string_contains: q.q } },
+              { id: { contains: search } },
+              { purpose: { contains: search } },
+              { dynamicsReference: { contains: search } },
+              { requester: { path: '$.name', string_contains: search } },
             ],
           }
         : {}),
@@ -94,14 +100,14 @@ export class RequestRecordsService {
     const sort = q.sort === 'closedAt' ? 'closedAt' : 'createdAt';
     const order = q.order === 'asc' ? 'asc' : 'desc';
     const [rows, total] = await this.db.$transaction([
-      this.db.floatRequest.findMany({
+      this.db.pettyCashRequest.findMany({
         where,
         orderBy: [{ [sort]: order }, { id: order }],
         skip: (page - 1) * pageSize,
         take: pageSize,
         include: { expenses: { where: { removedAt: null } } },
       }),
-      this.db.floatRequest.count({ where }),
+      this.db.pettyCashRequest.count({ where }),
     ]);
     return {
       data: rows.map((r) => {
@@ -109,6 +115,7 @@ export class RequestRecordsService {
         delete v.expenses;
         delete v.issuances;
         delete v.returns;
+        delete v.handovers;
         delete v.timeline;
         return v;
       }),

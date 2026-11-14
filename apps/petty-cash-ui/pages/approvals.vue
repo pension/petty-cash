@@ -10,8 +10,10 @@
       </div>
     </header>
 
-    <div class="space-y-5 pb-8">
-      <FloatStats />
+    <PageSkeleton v-if="!store.isPageReady('/approvals')" :stats="4" />
+
+    <div v-else class="space-y-5 pb-8">
+      <PettyCashStats />
 
       <PoCard>
         <ListTable v-if="pendingRequests.length > 0" :columns="columns">
@@ -107,9 +109,10 @@
 </template>
 
 <script setup lang="ts">
-import { formatDate, formatMoney } from '~/utils/floatFormat';
+import PageSkeleton from '~/components/petty-cash/PageSkeleton.vue';
+import { formatDate, formatMoney } from '~/utils/pettyCashFormat';
 
-import RequestPagination from '~/components/float/RequestPagination.vue';
+import RequestPagination from '~/components/petty-cash/RequestPagination.vue';
 import { computed, ref } from 'vue';
 import { CheckCircleIcon, CheckIcon, XMarkIcon } from '@heroicons/vue/20/solid';
 import {
@@ -123,11 +126,11 @@ import {
   PoTextarea,
   useToastify,
 } from '@pension/ui-kit';
-import FloatStats from '~/components/float/FloatStats.vue';
-import ListRow, { type ListCell } from '~/components/float/ListRow.vue';
-import ListTable, { type ListColumn } from '~/components/float/ListTable.vue';
-import { useFloatStore } from '~/stores/useFloatStore';
-import type { PettyCashSummary as PettyCashRequest } from '~/types/float';
+import PettyCashStats from '~/components/petty-cash/PettyCashStats.vue';
+import ListRow, { type ListCell } from '~/components/petty-cash/ListRow.vue';
+import ListTable, { type ListColumn } from '~/components/petty-cash/ListTable.vue';
+import { usePettyCashStore } from '~/stores/usePettyCashStore';
+import type { PettyCashSummary as PettyCashRequest } from '~/types/pettyCash';
 
 definePageMeta({
   layout: 'main',
@@ -137,7 +140,7 @@ useHead({
   title: 'Petty Cash — GS Approvals',
 });
 
-const store = useFloatStore();
+const store = usePettyCashStore();
 const { showToast } = useToastify();
 
 const pendingRequests = computed(() =>

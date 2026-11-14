@@ -6,11 +6,11 @@ const http = require('node:http');
 const {createRequire} = require('node:module');
 const root=path.resolve(__dirname,'../../..');
 const req=createRequire(path.join(root,'package.json'));
-if(!process.env.FLOAT_TEST_DATABASE_URL?.includes('/float_test'))throw new Error('Only an isolated float_test database is allowed.');
-process.env.DATABASE_URL=process.env.FLOAT_TEST_DATABASE_URL;
+if(!process.env.PETTY_CASH_TEST_DATABASE_URL?.includes('/petty_cash_test'))throw new Error('Only an isolated petty_cash_test database is allowed.');
+process.env.DATABASE_URL=process.env.PETTY_CASH_TEST_DATABASE_URL;
 process.env.MPAO_ENTITY_ID='1';process.env.APP_NAME='petty-cash';
 process.env.FILE_STORAGE='local';process.env.APP_ENV='development';
-const temp=fs.mkdtempSync(path.join(os.tmpdir(),'float-browser-'));process.env.FILE_STORAGE_PATH=path.join(temp,'receipts');
+const temp=fs.mkdtempSync(path.join(os.tmpdir(),'petty-cash-browser-'));process.env.FILE_STORAGE_PATH=path.join(temp,'receipts');
 fs.writeFileSync(path.join(temp,'.env'),`APP_NAME=petty-cash\nAPP_ENV=production\nCLIENT_ID=test\nCLIENT_SECRET=test\nAUTH_ENDPOINT=http://127.0.0.1:4002\nJWT_PUB=${path.join(root,'apps/petty-cash-api/secrets/jwtRS256.key.pub')}\nJWT_LOGGING=production\n`);
 process.chdir(temp);
 const {Test}=req('@nestjs/testing');const {IdentityGuard}=req('@pension/midgard');
@@ -30,7 +30,7 @@ async function main(){
   if(r.url.startsWith('/test-login')){const role=new URL(r.url,'http://local').searchParams.get('role')||'gs';if(!users[role]){s.writeHead(400);s.end();return;}s.setHeader('Content-Type','text/html');s.end(`<script>localStorage.setItem('user',${JSON.stringify(JSON.stringify(users[role]))});localStorage.setItem('access_token','test-${role}');location.replace('/');</script>`);return;}
   const upstream=http.request({hostname:'127.0.0.1',port:3002,path:r.url,method:r.method,headers:r.headers},response=>{s.writeHead(response.statusCode,response.headers);response.pipe(s);});upstream.on('error',()=>{s.writeHead(502);s.end('UI preview not running');});r.pipe(upstream);
  });
- proxy.listen(3001,'127.0.0.1',()=>console.log('Float QA: http://127.0.0.1:3001/test-login?role=gs'));
+ proxy.listen(3001,'127.0.0.1',()=>console.log('Petty Cash QA: http://127.0.0.1:3001/test-login?role=gs'));
  const stop=async()=>{proxy.close();await app.close();fs.rmSync(temp,{recursive:true,force:true});process.exit();};process.once('SIGTERM',stop);process.once('SIGINT',stop);
 }
 main().catch(e=>{console.error(e);process.exit(1);});

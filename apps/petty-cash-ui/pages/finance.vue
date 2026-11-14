@@ -10,14 +10,12 @@
       </div>
     </header>
 
-    <div class="space-y-5 pb-8">
-      <FloatStats />
+    <PageSkeleton v-if="!store.isPageReady('/finance')" :stats="4" />
 
-      <PoTabs
-        :tabs="tabs"
-        :current-tab="activeTab"
-        @button-click="(tab: Tab) => (activeTab = tab.name)"
-      />
+    <div v-else class="space-y-5 pb-8">
+      <PettyCashStats />
+
+      <PoTabs :tabs="tabs" :current-tab="activeTab" @button-click="changeTab" />
 
       <PoCard>
         <ListTable v-if="activeList.length > 0" :columns="columns">
@@ -28,7 +26,7 @@
             :title="item.purpose"
             :meta="`${item.id} · ${item.requester.name}`"
             :amount="formatMoney(rowAmount(item))"
-            :status="showStatus(item) ? floatStatus(item.status) : undefined"
+            :status="showStatus(item) ? pettyCashStatus(item.status) : undefined"
             :cells="cells(item)"
           >
             <template
@@ -89,9 +87,10 @@
 </template>
 
 <script setup lang="ts">
-import { formatMoney } from '~/utils/floatFormat';
+import PageSkeleton from '~/components/petty-cash/PageSkeleton.vue';
+import { formatMoney } from '~/utils/pettyCashFormat';
 
-import RequestPagination from '~/components/float/RequestPagination.vue';
+import RequestPagination from '~/components/petty-cash/RequestPagination.vue';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import {
@@ -114,13 +113,13 @@ import {
   type Tab,
   useToastify,
 } from '@pension/ui-kit';
-import FloatStats from '~/components/float/FloatStats.vue';
-import ListRow, { type ListCell } from '~/components/float/ListRow.vue';
-import ListTable, { type ListColumn } from '~/components/float/ListTable.vue';
-import NotifyCollectionModal from '~/components/float/NotifyCollectionModal.vue';
-import { useFloatStore } from '~/stores/useFloatStore';
-import type { PettyCashSummary as PettyCashRequest, RequestStatus } from '~/types/float';
-import { floatAmount, floatStatus } from '~/utils/floatStatus';
+import PettyCashStats from '~/components/petty-cash/PettyCashStats.vue';
+import ListRow, { type ListCell } from '~/components/petty-cash/ListRow.vue';
+import ListTable, { type ListColumn } from '~/components/petty-cash/ListTable.vue';
+import NotifyCollectionModal from '~/components/petty-cash/NotifyCollectionModal.vue';
+import { usePettyCashStore } from '~/stores/usePettyCashStore';
+import type { PettyCashSummary as PettyCashRequest, RequestStatus } from '~/types/pettyCash';
+import { pettyCashAmount, pettyCashStatus } from '~/utils/pettyCashStatus';
 
 definePageMeta({
   layout: 'main',
@@ -131,7 +130,7 @@ useHead({
 });
 
 const router = useRouter();
-const store = useFloatStore();
+const store = usePettyCashStore();
 const { showToast } = useToastify();
 
 const TAB_HEADS_UP = 'Heads-up';
@@ -139,21 +138,24 @@ const TAB_PENDING = 'Pending Disbursement';
 const TAB_DISBURSED = 'Disbursed';
 const TAB_SETTLED = 'Settled';
 
-const activeTab = ref(TAB_PENDING);
-
-watch(activeTab, async () => {
-  const statuses: Record<string, string> = {
-    'Heads-up': 'pending_approval',
-    'Pending Disbursement': 'pending_finance,ready_for_collection',
-    Disbursed: 'cash_issued,returned_for_correction',
-    Settled: 'pending_closure',
-  };
+const statuses: Record<string, string> = {
+  'Heads-up': 'pending_approval',
+  'Pending Disbursement': 'pending_finance,ready_for_collection',
+  Disbursed: 'cash_issued,returned_for_correction',
+  Settled: 'pending_closure',
+};
+const activeTab = computed(
+  () =>
+    Object.keys(statuses).find((name) => statuses[name] === store.requestQuery.status) ||
+    TAB_PENDING,
+);
+async function changeTab(tab: Tab) {
   try {
-    await store.fetchRequests({ status: statuses[activeTab.value] });
+    await store.fetchRequests({ status: statuses[tab.name], page: 1 }, '/finance');
   } catch (err) {
-    store.error = err instanceof Error ? err.message : 'Could not load Finance desk.';
+    showToast(err instanceof Error ? err.message : 'Could not load Finance desk.', 'error');
   }
-});
+}
 const byStatus = (statuses: RequestStatus[]) =>
   computed(() => store.allRequests.filter((r) => statuses.includes(r.status)));
 
@@ -226,7 +228,7 @@ function showStatus(req: PettyCashRequest): boolean {
 }
 
 function rowAmount(req: PettyCashRequest): number {
-  return req.totalCashIssued || floatAmount(req);
+  return req.totalCashIssued || pettyCashAmount(req);
 }
 
 // Notify for collection
@@ -267,7 +269,7 @@ function cells(item: PettyCashRequest): ListCell[] {
       align: 'right',
       class: 'tabular-nums font-semibold text-slate-900',
     },
-    showStatus(item) ? { status: floatStatus(item.status) } : {},
+    showStatus(item) ? { status: pettyCashStatus(item.status) } : {},
   ];
 }
 </script>

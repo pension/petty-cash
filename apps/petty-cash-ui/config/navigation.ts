@@ -1,5 +1,6 @@
 import {
   BanknotesIcon,
+  Cog6ToothIcon,
   CheckBadgeIcon,
   ClockIcon,
   InboxStackIcon,
@@ -42,6 +43,7 @@ export default [
         url: '/fund',
         icon: BanknotesIcon,
       },
+      { label: 'Settings', url: '/settings', icon: Cog6ToothIcon },
     ],
   },
 ];

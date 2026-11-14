@@ -8,6 +8,8 @@ export const today = () =>
     day: '2-digit',
   }).format(new Date());
 export function dateFilter(q: Pick<ListQuery, 'from' | 'to'>, field: string) {
+  if (q.from && q.to && q.from > q.to)
+    throw new BadRequestException('The start date must be on or before the end date.');
   const range: { gte?: Date; lte?: Date } = {};
   for (const key of ['from', 'to'] as const)
     if (q[key]) {

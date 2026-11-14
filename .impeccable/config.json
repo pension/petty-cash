@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "helvetica",
+        "files": [
+          "apps/petty-cash-ui/utils/floatPdf.ts"
+        ],
+        "createdAt": "2026-10-22T04:10:36.183Z",
+        "reason": "Repository AGENTS.md requires preserving the established Petty Cash PDF typography and layout; Helvetica is the existing voucher font."
+      }
+    ]
+  }
+}

@@ -14,6 +14,9 @@ const STATUS_CONFIG: Record<RequestStatus, { label: string; color: string }> = {
   cancelled: { label: 'Cancelled', color: 'gray' },
 };
 
+/** Largest petty cash amount (MVR) per request; the API enforces the same limit. */
+export const MAX_REQUEST_AMOUNT = 5000;
+
 export function floatStatus(status: RequestStatus) {
   return STATUS_CONFIG[status] || { label: status, color: 'gray' };
 }

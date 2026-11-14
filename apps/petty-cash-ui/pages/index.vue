@@ -10,18 +10,20 @@
       </div>
     </header>
 
-    <div class="space-y-6 pb-8">
-      <FloatStats />
+    <PageSkeleton v-if="!store.isPageReady('/')" :stats="4" />
+
+    <div v-else class="space-y-6 pb-8">
+      <PettyCashStats />
 
       <section class="space-y-3">
         <div
           class="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pb-1 sm:border-b border-slate-200/80"
         >
           <div class="flex items-center gap-2">
-            <PoHeading type="h2" size="sm" class="text-slate-900">My Active Petty Cash</PoHeading>
+            <PoHeading type="h2" size="sm" class="text-slate-900">Active Petty Cash</PoHeading>
             <PoStatusPill
-              v-if="myActiveRequests.length"
-              :label="`${myActiveRequests.length}`"
+              v-if="store.listTotal"
+              :label="`${store.listTotal}`"
               color="blue"
             />
           </div>
@@ -35,21 +37,21 @@
         </div>
 
         <PoCard>
-          <ListTable v-if="myActiveRequests.length > 0" :columns="columns">
+          <ListTable v-if="activeRequests.length > 0" :columns="columns">
             <ListRow
-              v-for="item in myActiveRequests"
+              v-for="item in activeRequests"
               :key="item.id"
               :to="`/requests/${item.id}`"
               :title="item.purpose"
-              :meta="`${item.id} · ${formatDate(item.createdAt)}`"
-              :amount="formatMoney(floatAmount(item))"
-              :status="floatStatus(item.status)"
+              :meta="`${item.id} · ${item.requester.name} · ${formatDate(item.createdAt)}`"
+              :amount="formatMoney(pettyCashAmount(item))"
+              :status="pettyCashStatus(item.status)"
               :cells="cells(item)"
             >
               <template
                 v-if="
                   item.allowedActions.some((a) =>
-                    ['edit', 'confirmReceipt', 'addExpense'].includes(a),
+                    ['edit', 'confirmReceipt', 'addExpense', 'acceptHandover'].includes(a),
                   )
                 "
                 #actions
@@ -70,6 +72,14 @@
                   :icon="CheckIcon"
                   :disabled="store.busy"
                   @button-click="handleConfirmReceived(item)"
+                />
+                <PoButton
+                  v-else-if="item.allowedActions.includes('acceptHandover')"
+                  size="sm"
+                  label="Accept hand-over"
+                  :icon="CheckBadgeIcon"
+                  :disabled="store.busy"
+                  @button-click="handleAcceptHandover(item)"
                 />
                 <PoButton
                   v-else
@@ -107,14 +117,16 @@
 </template>
 
 <script setup lang="ts">
-import { formatDate, formatMoney } from '~/utils/floatFormat';
+import PageSkeleton from '~/components/petty-cash/PageSkeleton.vue';
+import { formatDate, formatMoney } from '~/utils/pettyCashFormat';
 
-import RequestPagination from '~/components/float/RequestPagination.vue';
+import RequestPagination from '~/components/petty-cash/RequestPagination.vue';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   ArrowRightIcon,
   BanknotesIcon,
+  CheckBadgeIcon,
   CheckIcon,
   PencilSquareIcon,
   PlusIcon,
@@ -129,13 +141,13 @@ import {
   PoStatusPill,
   useToastify,
 } from '@pension/ui-kit';
-import FloatStats from '~/components/float/FloatStats.vue';
-import ListRow, { type ListCell } from '~/components/float/ListRow.vue';
-import ListTable, { type ListColumn } from '~/components/float/ListTable.vue';
-import PettyCashRequestModal from '~/components/float/PettyCashRequestModal.vue';
-import { useFloatStore } from '~/stores/useFloatStore';
-import type { PettyCashSummary as PettyCashRequest, RequestStatus } from '~/types/float';
-import { floatAmount, floatStatus } from '~/utils/floatStatus';
+import PettyCashStats from '~/components/petty-cash/PettyCashStats.vue';
+import ListRow, { type ListCell } from '~/components/petty-cash/ListRow.vue';
+import ListTable, { type ListColumn } from '~/components/petty-cash/ListTable.vue';
+import PettyCashRequestModal from '~/components/petty-cash/PettyCashRequestModal.vue';
+import { usePettyCashStore } from '~/stores/usePettyCashStore';
+import type { PettyCashSummary as PettyCashRequest, RequestStatus } from '~/types/pettyCash';
+import { pettyCashAmount, pettyCashStatus } from '~/utils/pettyCashStatus';
 
 definePageMeta({
   layout: 'main',
@@ -146,21 +158,28 @@ useHead({
 });
 
 const router = useRouter();
-const store = useFloatStore();
+const store = usePettyCashStore();
 const { showToast } = useToastify();
 
 const INACTIVE: RequestStatus[] = ['closed', 'rejected', 'cancelled'];
 
-const myActiveRequests = computed(() =>
-  store.allRequests.filter(
-    (r) => r.requester.id === store.currentUser.id && !INACTIVE.includes(r.status),
-  ),
+const activeRequests = computed(() =>
+  store.allRequests.filter((r) => !INACTIVE.includes(r.status)),
 );
 
 async function handleConfirmReceived(req: PettyCashRequest) {
   try {
     await store.collectCash(req.id);
-    showToast(`Receipt of MVR ${formatMoney(floatAmount(req))} confirmed`, 'success');
+    showToast(`Receipt of MVR ${formatMoney(pettyCashAmount(req))} confirmed`, 'success');
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : 'Could not complete this action.', 'error');
+  }
+}
+
+async function handleAcceptHandover(req: PettyCashRequest) {
+  try {
+    await store.acceptHandover(req.id);
+    showToast('Cash custody accepted', 'success');
   } catch (err) {
     showToast(err instanceof Error ? err.message : 'Could not complete this action.', 'error');
   }
@@ -184,6 +203,7 @@ function openEditModal(req: PettyCashRequest) {
 const columns: ListColumn[] = [
   { label: 'Date', width: '6rem' },
   { label: 'Voucher no', width: '7.5rem' },
+  { label: 'Requester', width: '8rem' },
   { label: 'Particulars' },
   { label: 'Petty cash (MVR)', width: '7rem', align: 'right' },
   { label: 'Status', width: '10rem' },
@@ -194,13 +214,14 @@ function cells(item: PettyCashRequest): ListCell[] {
   return [
     { text: formatDate(item.createdAt), class: 'tabular-nums' },
     { text: item.id, to: `/requests/${item.id}` },
+    { text: item.requester.name },
     { text: item.purpose, wrap: true },
     {
-      text: formatMoney(floatAmount(item)),
+      text: formatMoney(pettyCashAmount(item)),
       align: 'right',
       class: 'tabular-nums font-semibold text-slate-900',
     },
-    { status: floatStatus(item.status) },
+    { status: pettyCashStatus(item.status) },
   ];
 }
 </script>

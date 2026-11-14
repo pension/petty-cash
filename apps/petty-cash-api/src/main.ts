@@ -6,6 +6,10 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.enableCors();
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .get('/favicon.ico', (_req, res) => res.status(204).end());
   await app.listen(PORT);
 
   // Without this, Ctrl+C/SIGINT has no explicit handler here at all, so

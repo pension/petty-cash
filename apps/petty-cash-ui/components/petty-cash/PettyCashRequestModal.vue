@@ -20,6 +20,9 @@
           placeholder="0.00"
           type="number"
           :min="0"
+          :max="MAX_REQUEST_AMOUNT"
+          :message="`Up to MVR ${formatMoney(MAX_REQUEST_AMOUNT)}`"
+          :error-message="amountError"
           required
         />
         <PoDatePicker v-model="form.neededBy" label="Needed by" :min-date="today" required />
@@ -52,14 +55,16 @@ import {
   PoTypography,
   useToastify,
 } from '@pension/ui-kit';
-import { useFloatStore } from '~/stores/useFloatStore';
-import type { PettyCashSummary as PettyCashRequest } from '~/types/float';
+import { usePettyCashStore } from '~/stores/usePettyCashStore';
+import { formatMoney } from '~/utils/pettyCashFormat';
+import { MAX_REQUEST_AMOUNT } from '~/utils/pettyCashStatus';
+import type { PettyCashSummary as PettyCashRequest } from '~/types/pettyCash';
 
 // Pass `request` to edit an existing request; omit it to create a new one.
 const props = defineProps<{ show: boolean; request?: PettyCashRequest | null }>();
 const emit = defineEmits<{ close: [] }>();
 
-const store = useFloatStore();
+const store = usePettyCashStore();
 const { showToast } = useToastify();
 
 const today = new Intl.DateTimeFormat('en-CA', {
@@ -89,10 +94,20 @@ const isChanged = computed(
     form.neededBy !== props.request.effectiveClosingDate?.slice(0, 10),
 );
 
+const amountError = computed(() =>
+  Number(form.requestedAmount) > MAX_REQUEST_AMOUNT
+    ? `Requested petty cash cannot exceed MVR ${formatMoney(MAX_REQUEST_AMOUNT)}.`
+    : null,
+);
+
 const canSubmit = computed(
   () =>
+    (props.request
+      ? props.request.allowedActions.includes('edit') && store.staffEligibility.requester
+      : store.currentUser.capabilities.createRequest) &&
     form.purpose.trim() !== '' &&
     Number(form.requestedAmount) > 0 &&
+    !amountError.value &&
     !!form.neededBy &&
     isChanged.value,
 );

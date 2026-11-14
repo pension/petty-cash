@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { amount, neededBy, revision, text } from '../../common/validation';
+import { neededBy, requestAmount, revision, text } from '../../common/validation';
 export const EditSchema = z.object({
   purpose: text.optional(),
-  requestedAmount: amount.optional(),
+  requestedAmount: requestAmount.optional(),
   neededBy: neededBy.optional(),
   ...revision,
 });

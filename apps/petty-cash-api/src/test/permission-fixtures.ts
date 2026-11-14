@@ -1,7 +1,6 @@
 import type { Permission } from '../auth/permissions';
 import type { Role } from '../auth/actor';
 const read: Permission[] = [
-  'access.get',
   'requests.list',
   'requests.get',
   'fund.get',
@@ -27,6 +26,11 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     'requests.create',
     'requests.edit',
     'disbursements.confirmreceipt',
+    'disbursements.handover',
+    'disbursements.accepthandover',
+    'disbursements.cancelhandover',
+    'disbursements.declinehandover',
+    'disbursements.handovercandidates',
     'expenses.addexpense',
     'expenses.removeexpense',
     'settlements.settle',

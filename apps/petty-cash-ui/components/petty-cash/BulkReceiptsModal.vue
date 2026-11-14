@@ -244,11 +244,11 @@ import {
   useToastify,
 } from '@pension/ui-kit';
 import { useBulkReceipts, type BulkReceiptRow } from '~/composables/useBulkReceipts';
-import { useFloatStore } from '~/stores/useFloatStore';
-import { formatMoney } from '~/utils/floatFormat';
+import { usePettyCashStore } from '~/stores/usePettyCashStore';
+import { formatMoney } from '~/utils/pettyCashFormat';
 const props = defineProps<{ show: boolean; requestId: string }>();
 const emit = defineEmits<{ close: [] }>();
-const store = useFloatStore();
+const store = usePettyCashStore();
 const { showToast } = useToastify();
 const {
   rows,

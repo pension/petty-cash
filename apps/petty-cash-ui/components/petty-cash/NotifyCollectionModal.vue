@@ -55,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { formatMoney } from '~/utils/floatFormat';
+import { formatMoney } from '~/utils/pettyCashFormat';
 
 import { computed, ref, watch } from 'vue';
 import { BellAlertIcon } from '@heroicons/vue/20/solid';
@@ -68,13 +68,13 @@ import {
   PoTextarea,
   useToastify,
 } from '@pension/ui-kit';
-import { useFloatStore } from '~/stores/useFloatStore';
-import type { PettyCashSummary as PettyCashRequest } from '~/types/float';
+import { usePettyCashStore } from '~/stores/usePettyCashStore';
+import type { PettyCashSummary as PettyCashRequest } from '~/types/pettyCash';
 
 const props = defineProps<{ show: boolean; request: PettyCashRequest | null }>();
 const emit = defineEmits<{ close: [] }>();
 
-const store = useFloatStore();
+const store = usePettyCashStore();
 const { showToast } = useToastify();
 
 const amount = ref('');

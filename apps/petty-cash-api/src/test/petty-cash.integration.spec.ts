@@ -1,3 +1,4 @@
+import { StorageService } from '../storage/storage.service';
 jest.mock('@pension/midgard/dist/env', () => ({ APP_ENV: 'production', APP_NAME: 'petty-cash' }));
 import { IdentityTestModule } from './identity-test.module';
 import type { ExecutionContext, INestApplication } from '@nestjs/common';
@@ -41,10 +42,10 @@ import { FUND_ID } from '../common/constants';
 import { today } from '../common/dates';
 import { countTotal } from '../common/money';
 import { allowedActions } from '../common/request-policy';
-const integration = process.env.FLOAT_TEST_DATABASE_URL ? describe : describe.skip;
-integration('Float MySQL financial workflow', () => {
+const integration = process.env.PETTY_CASH_TEST_DATABASE_URL ? describe : describe.skip;
+integration('Petty Cash MySQL financial workflow', () => {
   const db = new PrismaService({
-    datasourceUrl: process.env.FLOAT_TEST_DATABASE_URL,
+    datasourceUrl: process.env.PETTY_CASH_TEST_DATABASE_URL,
   });
   let module: TestingModule;
   let app: INestApplication;
@@ -62,28 +63,44 @@ integration('Float MySQL financial workflow', () => {
   let access: AccessService;
   const gs: Actor = {
     id: 'test-gs',
+    entityId: 101,
     name: 'GS Staff',
     email: 'gs@example.test',
     roles: ['GS_REQUESTER'],
     permissions: ROLE_PERMISSIONS.GS_REQUESTER,
+    activeRequester: true,
+  };
+  const gs2: Actor = {
+    id: 'test-gs-2',
+    entityId: 105,
+    name: 'GS Staff Two',
+    email: 'gs2@example.test',
+    roles: ['GS_REQUESTER'],
+    permissions: ROLE_PERMISSIONS.GS_REQUESTER,
+    activeRequester: true,
   };
   const manager: Actor = {
     id: 'test-manager',
+    entityId: 102,
     name: 'GS Manager',
     email: 'manager@example.test',
     roles: ['GS_MANAGER'],
     permissions: ROLE_PERMISSIONS.GS_MANAGER,
+    activeRequester: false,
   };
   const finance: Actor = {
     id: 'test-finance',
+    entityId: 103,
     name: 'Finance',
     email: 'finance@example.test',
     roles: ['FINANCE_STAFF'],
     permissions: ROLE_PERMISSIONS.FINANCE_STAFF,
+    activeRequester: false,
   };
   const supervisor: Actor = {
     ...finance,
     id: 'test-supervisor',
+    entityId: 104,
     roles: ['FINANCE_SUPERVISOR'],
     permissions: ROLE_PERMISSIONS.FINANCE_SUPERVISOR,
   };
@@ -116,6 +133,14 @@ integration('Float MySQL financial workflow', () => {
         return expenses.removeExpense(id, data, actor, expenseId!);
       case 'settle':
         return settlements.settle(id, data, actor);
+      case 'handOver':
+        return disbursements.handOver(id, data, actor);
+      case 'acceptHandover':
+        return disbursements.acceptHandover(id, data, actor);
+      case 'cancelHandover':
+        return disbursements.cancelHandover(id, data, actor);
+      case 'declineHandover':
+        return disbursements.declineHandover(id, data, actor);
       case 'returnForCorrection':
         return settlements.returnForCorrection(id, data, actor);
       case 'finalize':
@@ -127,12 +152,12 @@ integration('Float MySQL financial workflow', () => {
     }
   }
   beforeAll(async () => {
-    if (!process.env.FLOAT_TEST_DATABASE_URL?.includes('/float_test'))
-      throw new Error('Integration tests require the isolated float_test database.');
+    if (!process.env.PETTY_CASH_TEST_DATABASE_URL?.includes('/petty_cash_test'))
+      throw new Error('Integration tests require the isolated petty_cash_test database.');
     process.env.MPAO_ENTITY_ID = '1';
     process.env.APP_NAME = 'petty-cash';
     process.env.FILE_STORAGE = 'local';
-    uploadDirectory = await mkdtemp(join(tmpdir(), 'float-http-'));
+    uploadDirectory = await mkdtemp(join(tmpdir(), 'petty-cash-http-'));
     process.env.FILE_STORAGE_PATH = uploadDirectory;
     module = await Test.createTestingModule({ imports: [IdentityTestModule, ...BUSINESS_MODULES] })
       .overrideProvider(PrismaService)
@@ -149,6 +174,7 @@ integration('Float MySQL financial workflow', () => {
           if (!actor) return false;
           req.user = {
             uuid: actor.id,
+            entity_id: actor.entityId,
             name: actor.name,
             email: actor.email,
             transacting_as: 1,
@@ -199,6 +225,28 @@ integration('Float MySQL financial workflow', () => {
         },
       });
     });
+    // The real ActorPipe (only IdentityGuard is mocked) looks up staff_assignments by entityId
+    // to compute `activeRequester`, which confirmReceipt now requires for the HTTP-driven test.
+    for (const person of [gs, gs2])
+      if (
+        !(await db.staffAssignment.findFirst({
+          where: { type: 'requester', employeeId: person.entityId, removedAt: null },
+        }))
+      )
+        await db.staffAssignment.create({
+          data: {
+            id: randomUUID(),
+            type: 'requester',
+            employeeId: person.entityId!,
+            activeEmployeeId: person.entityId!,
+            name: person.name,
+            email: person.email,
+            designation: 'Officer',
+            department: 'General Services',
+            addedBy: 'test-setup',
+            addedByName: 'Test Setup',
+          },
+        });
   });
   afterAll(async () => {
     await app?.close();
@@ -241,7 +289,7 @@ integration('Float MySQL financial workflow', () => {
       .get('/access')
       .set('Authorization', auth(gs))
       .expect(200);
-    expect(accessResponse.body).toEqual(access.get(gs));
+    expect(accessResponse.body).toEqual(await access.get(gs));
     expect(accessResponse.body).not.toHaveProperty('name');
     await request(server).get('/me').set('Authorization', auth(gs)).expect(404);
     await request(server).get('/api/float/requests').set('Authorization', auth(gs)).expect(404);
@@ -308,9 +356,7 @@ integration('Float MySQL financial workflow', () => {
     await post('return-for-correction', finance, { note: 'Confirm the invoice details' });
     await post('settle', gs);
     expect(row.declaredCashReturn).toBe(39.75);
-    await post('finalize', finance, {
-      denominations: { note20: 1, note10: 1, note5: 1, coin2: 2, coin0_5: 1, coin0_25: 1 },
-    });
+    await post('finalize', finance, { returnedAmount: 39.75 });
     expect(row.status).toBe('closed');
     expect(row.expenseTotal).toBe(60.25);
     expect((await fund.fund()).currentExpectedBalance).toBeCloseTo(before - 60.25, 2);
@@ -425,7 +471,7 @@ integration('Float MySQL financial workflow', () => {
       r.id,
       'finalize',
       {
-        denominations: { note100: 2, note20: 1 },
+        returnedAmount: 220,
         dynamicsReference: 'TEST-DYN',
       },
       finance,
@@ -443,10 +489,10 @@ integration('Float MySQL financial workflow', () => {
     await expect(db.fundTransaction.delete({ where: { id: row.id } })).rejects.toThrow();
   });
   test.each([
-    { spent: 900, counts: undefined, change: -50 },
-    { spent: 850, counts: undefined, change: 0 },
-    { spent: 630, counts: { note100: 2 }, change: 200 },
-  ])('finalizes spent=$spent', async ({ spent, counts, change }) => {
+    { spent: 900, returnedAmount: undefined, change: -50 },
+    { spent: 850, returnedAmount: undefined, change: 0 },
+    { spent: 630, returnedAmount: 200, change: 200 },
+  ])('finalizes spent=$spent', async ({ spent, returnedAmount, change }) => {
     const r = await issue();
     await expense(r.id, spent);
     await transition(r.id, 'settle', {}, gs);
@@ -454,13 +500,13 @@ integration('Float MySQL financial workflow', () => {
     const result = await transition(
       r.id,
       'finalize',
-      { ...(counts ? { denominations: counts } : {}) },
+      { ...(returnedAmount !== undefined ? { returnedAmount } : {}) },
       finance,
       randomUUID(),
     );
     expect((await fund.fund()).currentExpectedBalance).toBe(before + change);
     expect(result.status).toBe('closed');
-    if (counts) expect(result.returns![0].difference).toBe(-20);
+    if (returnedAmount !== undefined) expect(result.returns![0].difference).toBe(-20);
   });
   test('amount changes need a reason; editing and ownership enforced', async () => {
     const r = await create(5000);
@@ -503,6 +549,45 @@ integration('Float MySQL financial workflow', () => {
     updated = await requests.get(r.id, gs);
     expect(updated.correctionNote).toBeNull();
   });
+  test('cash custody hand-over requires acceptance, replaces the custodian, and can be withdrawn or declined', async () => {
+    const r = await issue(100);
+    const receipt = {
+      supplierName: 'Vendor',
+      description: 'Supplies',
+      expenseDate: today(),
+      amount: 5,
+    };
+    // Before any offer, only the current custodian (gs) can touch receipts/settle.
+    await expect(transition(r.id, 'addExpense', receipt, gs2)).rejects.toMatchObject({
+      status: 403,
+    });
+
+    // Offer, then decline: custody stays with gs.
+    await transition(r.id, 'handOver', { toEmployeeId: gs2.entityId, note: 'Going on leave' }, gs);
+    await expect(transition(r.id, 'acceptHandover', {}, gs)).rejects.toMatchObject({ status: 403 });
+    const declined = await transition(r.id, 'declineHandover', {}, gs2);
+    expect(declined.custodianName).toBe(gs.name);
+    expect(declined.pendingCustodianName).toBeNull();
+
+    // Offer again, then withdraw: custody still stays with gs.
+    await transition(r.id, 'handOver', { toEmployeeId: gs2.entityId }, gs);
+    await expect(transition(r.id, 'addExpense', receipt, gs2)).rejects.toMatchObject({
+      status: 403,
+    });
+    const cancelled = await transition(r.id, 'cancelHandover', {}, gs);
+    expect(cancelled.pendingCustodianName).toBeNull();
+
+    // Offer again, accept: custody moves to gs2, who can now act, and gs can no longer.
+    await transition(r.id, 'handOver', { toEmployeeId: gs2.entityId }, gs);
+    const accepted = await transition(r.id, 'acceptHandover', {}, gs2);
+    expect(accepted.custodianName).toBe(gs2.name);
+    await expect(transition(r.id, 'addExpense', receipt, gs)).rejects.toMatchObject({
+      status: 403,
+    });
+    await transition(r.id, 'addExpense', receipt, gs2);
+    await transition(r.id, 'settle', {}, gs2);
+    expect(await db.cashHandover.count({ where: { requestId: r.id } })).toBe(1);
+  });
   test('permission-based approval and finalization including own requests', async () => {
     const r = await create();
     await expect(transition(r.id, 'authorize', {}, gs)).rejects.toMatchObject({
@@ -535,13 +620,13 @@ integration('Float MySQL financial workflow', () => {
     const issued = await issue(10);
     await transition(issued.id, 'settle', {}, gs);
     await expect(
-      transition(issued.id, 'finalize', { denominations: { note10: 1 } }, gs, randomUUID()),
+      transition(issued.id, 'finalize', { returnedAmount: 10 }, gs, randomUUID()),
     ).rejects.toMatchObject({ status: 403 });
     await expect(
       transition(
         issued.id,
         'finalize',
-        { denominations: { note10: 1 } },
+        { returnedAmount: 10 },
         {
           ...gs,
           roles: ['GS_REQUESTER', 'FINANCE_STAFF'],
@@ -560,8 +645,8 @@ integration('Float MySQL financial workflow', () => {
     await expense(r.id, 50);
     await transition(r.id, 'settle', {}, gs);
     const results = await Promise.allSettled([
-      transition(r.id, 'finalize', { denominations: { note50: 1 } }, finance, randomUUID()),
-      transition(r.id, 'finalize', { denominations: { note50: 1 } }, finance, randomUUID()),
+      transition(r.id, 'finalize', { returnedAmount: 50 }, finance, randomUUID()),
+      transition(r.id, 'finalize', { returnedAmount: 50 }, finance, randomUUID()),
     ]);
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     expect(
@@ -579,9 +664,14 @@ integration('Float MySQL financial workflow', () => {
     await expect(
       fund.topUp({ amount: 4000, reference: 'TEST' }, finance, key),
     ).rejects.toMatchObject({ status: 409 });
-    const r = await create(999999);
+    const r = await create(5000);
     await transition(r.id, 'authorize', {}, manager);
-    await transition(r.id, 'notifyCollection', { amount: 999999 }, finance);
+    await transition(
+      r.id,
+      'notifyCollection',
+      { amount: 999999, reason: 'Exceeds vault cash' },
+      finance,
+    );
     await expect(transition(r.id, 'confirmReceipt', {}, gs, randomUUID())).rejects.toMatchObject({
       status: 409,
     });
@@ -632,10 +722,10 @@ integration('Float MySQL financial workflow', () => {
     expect(before).toBeGreaterThan(0);
   });
   test('attachments enforce ownership and cleanup retains removed receipt evidence', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'float-cleanup-test-'));
+    const directory = await mkdtemp(join(tmpdir(), 'petty-cash-cleanup-test-'));
     process.env.FILE_STORAGE = 'local';
     process.env.FILE_STORAGE_PATH = directory;
-    const files = new FilesService(db);
+    const files = new FilesService(db, new StorageService());
     try {
       const r = await issue(10);
       const makeFile = (ownerId: string) =>
@@ -662,7 +752,7 @@ integration('Float MySQL financial workflow', () => {
         fileId: attached.id,
       };
       await expect(
-        transition(r.id, 'addExpense', body, { ...gs, id: 'another-gs' }),
+        transition(r.id, 'addExpense', body, { ...gs, id: 'another-gs', entityId: 999 }),
       ).rejects.toMatchObject({ status: 403 });
       const added = await transition(r.id, 'addExpense', body, gs);
       await transition(r.id, 'removeExpense', {}, gs, undefined, added.expenses![0].id);
@@ -676,15 +766,12 @@ integration('Float MySQL financial workflow', () => {
     }
   });
   test('history search, report completeness, ledger invariant and role inbox isolation', async () => {
-    const history = await requests.list(
-      { status: 'closed', q: 'TEST-DYN', sort: 'closedAt' },
-      finance,
-    );
+    const history = await requests.list({ status: 'closed', q: 'TEST-DYN', sort: 'closedAt' }, gs);
     expect(history.total).toBeGreaterThan(0);
     expect(history.data.every((r) => r.status === 'closed')).toBe(true);
     const stats = await statistics.stats();
     expect(stats.cashInVault).toBe((await fund.fund()).currentExpectedBalance);
-    expect(access.get(gs)).toEqual({
+    expect(await access.get(gs)).toMatchObject({
       roles: ['GS_REQUESTER'],
       capabilities: { createRequest: true, topUp: false, recordCount: false, resolveCount: false },
     });
@@ -696,6 +783,21 @@ integration('Float MySQL financial workflow', () => {
     expect(gsInbox.data.every((n) => n.recipientId === gs.id)).toBe(true);
     const managerInbox = await notifications.notifications({}, manager);
     expect(managerInbox.data.some((n) => n.audience === 'GS_MANAGER')).toBe(true);
+  });
+  test('requests.list and requests.history list every requester’s requests for holders of the permission', async () => {
+    const r = await create();
+    const seenByManager = await requests.list({}, manager);
+    expect(seenByManager.data.some((row) => row.id === r.id)).toBe(true);
+    const seenInHistory = await requests.history({ status: 'closed' }, finance);
+    expect(seenInHistory.data.every((row) => row.status === 'closed')).toBe(true);
+  });
+  test('a non-owner holding requests.list, requests.history, approvals.list or disbursements.list can open another requester’s detail', async () => {
+    const r = await create();
+    await expect(requests.get(r.id, manager)).resolves.toMatchObject({ id: r.id });
+    await expect(requests.get(r.id, finance)).resolves.toMatchObject({ id: r.id });
+    await expect(
+      requests.get(r.id, { ...gs, id: 'no-permission', permissions: [] }),
+    ).rejects.toMatchObject({ status: 403 });
   });
 });
 describe('MPAO boundary and exact money', () => {
@@ -726,5 +828,13 @@ describe('MPAO boundary and exact money', () => {
   test('allows MPAO and keeps laari exact', () => {
     expect(actorFrom(user, ['requests.create']).roles).toEqual(['GS_REQUESTER']);
     expect(countTotal({ coin0_10: 3, coin0_1: 1 }).toFixed(2)).toBe('0.31');
+  });
+  test('falls back to the staff work email when Bifrost leaves the top-level email blank', () => {
+    const staffUser = {
+      ...user,
+      email: null,
+      staff_detail: { work_email: 'work@example.test' },
+    } as unknown as AuthUser;
+    expect(actorFrom(staffUser, []).email).toBe('work@example.test');
   });
 });

@@ -17,14 +17,14 @@ model Fund {
   custodian              String            @map("custodian")
   description            String?           @map("description")
   createdAt              DateTime          @default(now()) @map("created_at")
-  requests               FloatRequest[]
+  requests               PettyCashRequest[]
   transactions           FundTransaction[]
   counts                 VaultCount[]
 
   @@map("funds")
 }
 
-model FloatRequest {
+model PettyCashRequest {
   id                   String            @id @map("id") @db.VarChar(40)
   fundId               String            @map("fund_id") @db.VarChar(40)
   fund                 Fund              @relation(fields: [fundId], references: [id])
@@ -47,12 +47,18 @@ model FloatRequest {
   closedBy             String?           @map("closed_by")
   closedAt             DateTime?         @map("closed_at")
   lastReminderAt       DateTime?         @map("last_reminder_at")
+  custodianEmployeeId        Int?        @map("custodian_employee_id") @db.UnsignedInt
+  custodianName              String?     @map("custodian_name")
+  pendingCustodianEmployeeId Int?        @map("pending_custodian_employee_id") @db.UnsignedInt
+  pendingCustodianName       String?     @map("pending_custodian_name")
+  pendingHandoverNote        String?     @map("pending_handover_note") @db.Text
   version              Int               @default(1) @map("version")
   createdAt            DateTime          @default(now()) @map("created_at")
   updatedAt            DateTime          @updatedAt @map("updated_at")
   expenses             Expense[]
   issuances            CashIssuance[]
   returns              CashReturn[]
+  handovers            CashHandover[]
   timeline             TimelineEvent[]
   transactions         FundTransaction[]
 
@@ -65,7 +71,7 @@ model FloatRequest {
 model Expense {
   id                 String       @id @default(uuid()) @map("id") @db.VarChar(40)
   requestId          String       @map("request_id") @db.VarChar(40)
-  request            FloatRequest @relation(fields: [requestId], references: [id])
+  request            PettyCashRequest @relation(fields: [requestId], references: [id])
   supplierName       String       @map("supplier_name")
   category           String?      @map("category")
   invoiceNumber      String       @map("invoice_number")
@@ -103,7 +109,7 @@ model ReceiptFile {
 model CashIssuance {
   id             String       @id @default(uuid()) @map("id") @db.VarChar(40)
   requestId      String       @unique @map("request_id") @db.VarChar(40)
-  request        FloatRequest @relation(fields: [requestId], references: [id])
+  request        PettyCashRequest @relation(fields: [requestId], references: [id])
   amount         Decimal      @map("amount") @db.Decimal(14, 2)
   issuedBy       String       @map("issued_by")
   issuedAt       DateTime     @default(now()) @map("issued_at")
@@ -117,17 +123,32 @@ model CashIssuance {
 model CashReturn {
   id             String       @id @default(uuid()) @map("id") @db.VarChar(40)
   requestId      String       @unique @map("request_id") @db.VarChar(40)
-  request        FloatRequest @relation(fields: [requestId], references: [id])
+  request        PettyCashRequest @relation(fields: [requestId], references: [id])
   expectedAmount Decimal      @map("expected_amount") @db.Decimal(14, 2)
   actualAmount   Decimal      @map("actual_amount") @db.Decimal(14, 2)
   difference     Decimal      @map("difference") @db.Decimal(14, 2)
-  denominations  Json         @map("denominations")
+  denominations  Json?        @map("denominations")
   receivedBy     String       @map("received_by")
   returnedBy     String       @map("returned_by")
   returnDate     DateTime     @default(now()) @map("return_date")
   acknowledged   Boolean      @default(true) @map("acknowledged")
 
   @@map("cash_returns")
+}
+
+model CashHandover {
+  id             String       @id @default(uuid()) @map("id") @db.VarChar(40)
+  requestId      String       @map("request_id") @db.VarChar(40)
+  request        PettyCashRequest @relation(fields: [requestId], references: [id])
+  fromEmployeeId Int          @map("from_employee_id") @db.UnsignedInt
+  fromName       String       @map("from_name")
+  toEmployeeId   Int          @map("to_employee_id") @db.UnsignedInt
+  toName         String       @map("to_name")
+  note           String?      @map("note") @db.Text
+  acceptedAt     DateTime     @default(now()) @map("accepted_at")
+
+  @@index([requestId])
+  @@map("cash_handovers")
 }
 
 model FundTransaction {
@@ -140,7 +161,7 @@ model FundTransaction {
   runningBalance Decimal       @map("running_balance") @db.Decimal(14, 2)
   date           DateTime      @default(now()) @map("date")
   requestId      String?       @map("request_id") @db.VarChar(40)
-  request        FloatRequest? @relation(fields: [requestId], references: [id])
+  request        PettyCashRequest? @relation(fields: [requestId], references: [id])
   reference      String        @map("reference")
   recordedBy     String        @map("recorded_by")
   actorId        String        @map("actor_id")
@@ -176,7 +197,7 @@ model TimelineEvent {
   sequence    Int          @id @default(autoincrement()) @map("sequence")
   id          String       @unique @default(uuid()) @map("id") @db.VarChar(40)
   requestId   String       @map("request_id") @db.VarChar(40)
-  request     FloatRequest @relation(fields: [requestId], references: [id])
+  request     PettyCashRequest @relation(fields: [requestId], references: [id])
   type        String       @map("type")
   title       String       @map("title")
   description String       @map("description") @db.Text
@@ -205,17 +226,19 @@ model IdempotencyRecord {
 }
 
 model Notification {
-  id          String             @id @default(uuid()) @map("id") @db.VarChar(40)
-  title       String             @map("title")
-  text        String             @map("text") @db.Text
-  recipientId String?            @map("recipient_id") @db.VarChar(100)
-  audience    String?            @map("audience")
-  url         String             @map("url")
-  dedupeKey   String             @unique @map("dedupe_key")
-  createdAt   DateTime           @default(now()) @map("created_at")
-  reads       NotificationRead[]
+  id                String             @id @default(uuid()) @map("id") @db.VarChar(40)
+  title             String             @map("title")
+  text              String             @map("text") @db.Text
+  recipientId       String?            @map("recipient_id") @db.VarChar(100)
+  recipientEntityId Int?               @map("recipient_entity_id") @db.UnsignedInt
+  audience          String?            @map("audience")
+  url               String             @map("url")
+  dedupeKey         String             @unique @map("dedupe_key")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  reads             NotificationRead[]
 
   @@index([recipientId, createdAt])
+  @@index([recipientEntityId, createdAt])
   @@map("notifications")
 }
 
@@ -227,4 +250,63 @@ model NotificationRead {
 
   @@id([notificationId, userId])
   @@map("notification_reads")
+}
+
+// Permanent per-type rows serialize assignment changes, including the first add.
+model StaffAssignmentType {
+  type        String            @id @map("type") @db.VarChar(20)
+  assignments StaffAssignment[]
+
+  @@map("staff_assignment_types")
+}
+
+model StaffAssignment {
+  id               String              @id @map("id") @db.VarChar(40)
+  type             String              @map("type") @db.VarChar(20)
+  assignmentType   StaffAssignmentType @relation(fields: [type], references: [type], onDelete: Restrict, onUpdate: Restrict, map: "staff_assignments_type_fk")
+  employeeId       Int                 @map("employee_id") @db.UnsignedInt
+  activeEmployeeId Int?                @map("active_employee_id") @db.UnsignedInt
+  rcn              String?             @map("rcn") @db.VarChar(100)
+  identifier       String?             @map("identifier") @db.VarChar(100)
+  name             String              @map("name")
+  email            String              @map("email") @db.VarChar(254)
+  designation      String              @map("designation")
+  department       String              @map("department")
+  addedAt          DateTime            @default(now()) @map("added_at")
+  addedBy          String              @map("added_by") @db.VarChar(100)
+  addedByName      String              @map("added_by_name")
+  removedAt        DateTime?           @map("removed_at")
+  removedBy        String?             @map("removed_by") @db.VarChar(100)
+  removedByName    String?             @map("removed_by_name")
+
+  @@unique([type, activeEmployeeId])
+  @@index([employeeId, removedAt])
+  @@index([type, removedAt, addedAt])
+  @@map("staff_assignments")
+}
+
+model BlinkIdentity {
+  email     String   @id @map("email") @db.VarChar(254)
+  blinkId   String?  @map("blink_id") @db.VarChar(100)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("blink_identities")
+}
+
+model NotificationLog {
+  id        String   @id @default(uuid()) @map("id") @db.VarChar(40)
+  type      String   @map("type") @db.VarChar(20)
+  requestId String?  @map("request_id") @db.VarChar(40)
+  email     String   @map("email") @db.VarChar(254)
+  subject   String?  @map("subject") @db.VarChar(255)
+  body      String   @map("body") @db.Text
+  replyTo   String?  @map("reply_to") @db.VarChar(254)
+  status    String   @default("pending") @map("status") @db.VarChar(20)
+  error     String?  @map("error") @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([type, status, createdAt])
+  @@index([requestId])
+  @@map("notification_logs")
 }

@@ -45,13 +45,13 @@ images:
   - "$_GCR_HOSTNAME/$PROJECT_ID/$_SERVICE_NAME"
 options:
   substitutionOption: ALLOW_LOOSE
-  machineType: "E2_HIGHCPU_8"
+  # Omit machineType to use Cloud Build's default e2-standard-2.
 substitutions:
   _SERVICE_ACCOUNT: cloudrun@staging-278118.iam.gserviceaccount.com
   _DEPLOY_REGION: asia-northeast1
   _GCR_HOSTNAME: asia.gcr.io
-  _LABELS: gcb-trigger-id=0d05f24a-0bc9-425f-9a20-eacbbc02bd17
-  _TRIGGER_ID: 0d05f24a-0bc9-425f-9a20-eacbbc02bd17
+  _LABELS: gcb-trigger-id=9bd32a06-6e4e-4bc5-803b-1cf8dfb1bbd1
+  _TRIGGER_ID: 9bd32a06-6e4e-4bc5-803b-1cf8dfb1bbd1
   _PLATFORM: managed
   _SERVICE_NAME: petty-cash-ui
   _GH_PAT: build-arg-gh_pat

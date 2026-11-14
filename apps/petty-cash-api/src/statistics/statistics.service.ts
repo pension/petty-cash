@@ -9,7 +9,7 @@ export class StatisticsService {
   ) {}
   async stats() {
     const [groups, fund, last, unresolved] = await Promise.all([
-      this.db.floatRequest.groupBy({ by: ['status'], _count: true }),
+      this.db.pettyCashRequest.groupBy({ by: ['status'], _count: true }),
       this.fundService.fund(),
       this.db.vaultCount.findFirst({ orderBy: { sequence: 'desc' } }),
       this.db.vaultCount.count({ where: { status: 'discrepancy_pending' } }),

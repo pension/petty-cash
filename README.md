@@ -31,7 +31,7 @@ yarn lint
 yarn workspace petty-cash-api test --runInBand
 ```
 
-Set `FLOAT_TEST_DATABASE_URL=mysql://.../float_test` for database integration tests. Use a dedicated test database; tests append activity and must never target production. Apply the same migrations to it first. Tests cover cash paths, audit immutability, concurrency, idempotency, every endpoint’s MPAO boundary, streamed bytes, bounded buffering, upload failure cleanup and retention of receipt evidence.
+Set `PETTY_CASH_TEST_DATABASE_URL=mysql://.../petty_cash_test` for database integration tests. Use a dedicated test database; tests append activity and must never target production. Apply the same migrations to it first. `COMMON_GRPC_URL` must also be set (any reachable value, e.g. `127.0.0.1:1`) for the suite to boot — it only needs the employee directory module to construct, not to actually answer calls. Tests cover cash paths, audit immutability, concurrency, idempotency, every endpoint’s MPAO boundary, streamed bytes, bounded buffering, upload failure cleanup and retention of receipt evidence.
 
 ## Media storage
 
@@ -40,11 +40,15 @@ The API accepts the shared storage variables used by contribution-api:
 ```dotenv
 FILE_STORAGE=gcs
 STORAGE_PROJECT_ID=mpao-1327
-STORAGE_KEY_FILE=secrets/stag-bucket.json
+STORAGE_KEY_FILE=./secrets/dev-bucket.json
 STORAGE_MEDIA_BUCKET=staging.mpao-1327.appspot.com
 ```
 
-The key path is relative to the API process working directory. For local Docker, place it at `apps/petty-cash-api/secrets/stag-bucket.json`; the existing source mount exposes it at `/workspace/apps/petty-cash-api/secrets/stag-bucket.json`. Service-account JSON is ignored by Git and excluded from image builds. Mount credentials at runtime for deployments, or omit `STORAGE_KEY_FILE` to use the runtime service account (Application Default Credentials). `GCS_RECEIPT_BUCKET` remains a compatibility fallback; `STORAGE_MEDIA_BUCKET` takes precedence.
+The key path is relative to the API process working directory. For local Docker, place it at `apps/petty-cash-api/secrets/dev-bucket.json`; the source mount exposes it under the API directory. Credentials remain ignored by Git. `GCS_RECEIPT_BUCKET` remains a compatibility fallback; `STORAGE_MEDIA_BUCKET` takes precedence.
+
+Staging follows Employment API as explicitly requested: storage variables come from `stag-nest-api-global`, and Cloud Build separately fetches `stag-bucket-key` into `apps/petty-cash-api/secrets/dev-bucket.json`. `Dockerfile.api` copies the secrets directory to `/home/node/secrets`, matching `STORAGE_KEY_FILE=./secrets/dev-bucket.json`. `Dockerfile.api.dockerignore` permits only this storage JSON file in the API build; the default ignore rules still exclude credential JSON from UI builds. This means the staging API image contains the storage credential, just as Employment API does. No runtime secret mount, symlink, or extra storage environment override is used. Rebuild and redeploy staging to apply this setup; live access has not been verified.
+
+`StorageModule` exports `StorageService` for streamed storage writes, reads and deletes. `FilesService` owns multipart validation, receipt metadata and authorization. New objects use `petty-cash/<server-generated UUID>` (the bucket folder is `petty-cash/`, without a leading slash). That complete key is saved in `receipt_files.storage_key`; downloads, OCR and cleanup use it verbatim. Existing root-level objects keep working without a data migration or move.
 
 The current local environment retains `FILE_STORAGE=local` because the storage key has not been installed. Before switching, copy existing receipt objects from the local volume into the configured bucket using their unchanged database `storageKey` values; switching adapters does not migrate files. The bucket must keep receipts private; retrieval remains through the guarded API. The Terraform bucket resource is for provisioning a new dedicated bucket and must not be applied to recreate this existing shared media bucket.
 
@@ -58,12 +62,18 @@ Verify proxy/load-balancer request buffering is disabled for multipart traffic a
 
 Set server-side `GEMINI_API_KEY` to enable Google AI receipt extraction; optional `GEMINI_RECEIPT_MODEL` defaults to `gemini-3.5-flash-lite`. After upload, a progress state appears while AI checks the document and extracts vendor/date/total/invoice/item details; the editable form opens afterwards. Multiple items fill “What was bought” separated by commas. Non-bill documents or AI failures show a message and open manual entry; they never block subsequent processing. See [receipt extraction](docs/RECEIPT_AI.md). Dynamics references are entered manually. Email delivery is not enabled.
 
-See [AGENTS.md](AGENTS.md), [backend PRD](docs/FLOAT_BACKEND_PRD.md), and [implementation checklist](docs/IMPLEMENTATION.md).
+See [AGENTS.md](AGENTS.md), [backend PRD](docs/PETTY_CASH_BACKEND_PRD.md), and [implementation checklist](docs/IMPLEMENTATION.md).
 
 ## API structure and configuration changes
 
 Each feature has its own Nest module, controller, service and input DTOs; see [API structure](docs/API_STRUCTURE.md). Identity comes from Bifrost `/me`; the local `/access` endpoint returns roles/capabilities only. `IdentityGuard` verifies authentication and `EntityGuard` checks the active MPAO entity.
 
-For existing configuration, replace `MPAO_ORGANISATION_UUID` with the verified numeric `MPAO_ENTITY_ID`, and set `NUXT_PUBLIC_API_BASE` to the API origin (for example `http://localhost:4000`) without `/api/float`. No database migration is required for this structural refactor. The old prefixed routes and local `/me` endpoint are intentionally unavailable.
+For existing configuration, replace `MPAO_ORGANISATION_UUID` with the verified numeric `MPAO_ENTITY_ID`, and set `PETTY_CASH_API_URL` to the API origin (for example `http://localhost:4000`) without `/api/float`. No database migration is required for this structural refactor. The old prefixed routes and local `/me` endpoint are intentionally unavailable.
 
 Permission setup and bulk SQL: [PERMISSIONS.md](docs/PERMISSIONS.md). Use `APP_NAME=petty-cash`; development skips permissions through Midgard while retaining authentication, MPAO and workflow checks.
+
+## Staff Settings
+
+Settings manages requester and approver staff assignments using an email lookup through common-grpc. Frontend request/approval actions require active staff assignments in addition to existing permissions; backend business authorization is unchanged. See [staff settings and rollout](docs/STAFF_SETTINGS.md) for the shared proto release, gRPC configuration, additive database migration, Bifrost permissions and first-time setup. No real staff are seeded.
+
+The UI reads `PETTY_CASH_API_URL` when Nuxt loads its configuration. Include it in the UI build environment (for example, its `.env` assembled from Secret Manager), using the HTTPS API origin in testing/production. Rebuild and redeploy the UI after changing it. `NUXT_PUBLIC_API_BASE` remains supported for existing installations and is Nuxt's runtime override for `public.apiBase`; remove a stale override when switching to the shared variable.

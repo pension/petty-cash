@@ -193,12 +193,12 @@ import {
   PoTypography,
   useToastify,
 } from '@pension/ui-kit';
-import { useFloatStore } from '~/stores/useFloatStore';
+import { usePettyCashStore } from '~/stores/usePettyCashStore';
 
 const props = defineProps<{ show: boolean; requestId: string }>();
 const emit = defineEmits<{ close: [] }>();
 
-const store = useFloatStore();
+const store = usePettyCashStore();
 const { showToast } = useToastify();
 
 const categoryOptions = [

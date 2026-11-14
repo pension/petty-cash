@@ -24,7 +24,7 @@ export class ReportsService {
           where: dateFilter(q, 'countDate'),
           orderBy: { sequence: 'desc' },
         });
-        const staff = await tx.floatRequest.aggregate({
+        const staff = await tx.pettyCashRequest.aggregate({
           where: { status: { in: active } },
           _sum: { totalCashIssued: true },
         });

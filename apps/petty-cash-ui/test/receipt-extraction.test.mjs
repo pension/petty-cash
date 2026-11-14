@@ -10,7 +10,7 @@ const transpile = (source) => ts.transpileModule(source, {
 }).outputText;
 const helper = {};
 runInNewContext(transpile(readFileSync(new URL('../utils/receiptExtraction.ts', import.meta.url), 'utf8')), { exports: helper });
-const { descriptor } = parse(readFileSync(new URL('../components/float/ReceiptScanModal.vue', import.meta.url), 'utf8'));
+const { descriptor } = parse(readFileSync(new URL('../components/petty-cash/ReceiptScanModal.vue', import.meta.url), 'utf8'));
 const compiled = transpile(compileScript(descriptor, { id: 'receipt-test' }).content);
 const result = { documentType: 'invoice', supplierName: 'AI Shop', amount: 50.5, expenseDate: '2026-01-01', invoiceNumber: 'INV-1', description: 'Paper, Pens' };
 function setup(extractReceipt) {
@@ -22,7 +22,7 @@ function setup(extractReceipt) {
     require: (name) => {
       if (name === 'vue') return vue;
       if (name === '~/utils/receiptExtraction') return helper;
-      if (name === '~/stores/useFloatStore') return { useFloatStore: () => store };
+      if (name === '~/stores/usePettyCashStore') return { usePettyCashStore: () => store };
       if (name === '@pension/ui-kit') return { useToastify: () => ({ showToast() {} }) };
       if (name.startsWith('@heroicons/')) return {};
       throw new Error(name);

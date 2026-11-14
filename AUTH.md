@@ -2,7 +2,7 @@
 
 Petty Cash UI uses a PUBLIC PKCE client. Never put a client secret in Nuxt public runtime configuration; confidential secrets belong only in the API. The generic examples below are historical integration notes.
 
-Petty Cash controllers use `IdentityGuard` and the existing EntityGuard pattern from verification-api. Configure `MPAO_ENTITY_ID` to the verified numeric Bifrost entity ID; the guard compares the active `transacting_as` value. Controller/action permissions are enforced with PermissionGuard. ActorPipe uses the same IdentityService evaluator for capabilities and allowedActions, including the standard APP_ENV=development bypass. Bifrost `/me` remains the sole identity endpoint. The UI consumes Midgard's identity state and calls `/access` only for application authorization metadata. Business routes have no `/api/float` prefix; module-provided Midgard routes retain their own paths.
+Petty Cash controllers use `IdentityGuard` and the existing EntityGuard pattern from verification-api. Configure `MPAO_ENTITY_ID` to the verified numeric Bifrost entity ID; the guard compares the active `transacting_as` value. Controller/action permissions are enforced with PermissionGuard. `GET /access` and `POST /idempotency-keys` are explicit exceptions: use only `IdentityGuard` and `EntityGuard`, with no separate action permissions. Access reports the caller’s capabilities (all false when none are granted); retry keys grant no business authority.  ActorPipe uses the same IdentityService evaluator for capabilities and allowedActions, including the standard APP_ENV=development bypass. Bifrost `/me` remains the sole identity endpoint. The UI consumes Midgard's identity state and calls `/access` only for application authorization metadata, including active requester/approver staff eligibility. Staff assignments constrain frontend actions only; backend business handlers still authorize individual permissions. Business routes have no `/api/float` prefix; module-provided Midgard routes retain their own paths.
 
 ## Application identifier
 
@@ -14,7 +14,7 @@ Use `IdentityGuard`, `EntityGuard`, then `PermissionGuard`. Permission keys foll
 
 `APP_ENV=development` bypasses permission checks as in contribution-api and contribution-ui. The UI consumes server-calculated capabilities and allowedActions, so it follows the same environment behavior. Identity, MPAO selection, ownership and financial/workflow checks still apply. Production permission tests must use APP_ENV=production; NODE_ENV alone does not control this behavior. The installed library reads APP_ENV from the API .env file.
 
-See [permission setup](docs/PERMISSIONS.md) for the bulk SQL, role grouping and assignment steps. The SQL creates definitions and a role only; it does not grant anyone access.
+See [permission setup](docs/PERMISSIONS.md) for the bulk SQL, role grouping and assignment steps. The SQL creates definitions and the Request and Finance roles only; it does not grant anyone access.
 
 # Auth Implementation Guide (Bifrost)
 

@@ -1,0 +1,2029 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index 04433fe..19e9c6e 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -6,7 +6,7 @@ The product name is **Petty Cash**. Use it in all user-facing copy, error messag
+ 
+ ## Source precedence and design
+ 
+-Explicit user decisions take precedence over `docs/FLOAT_BACKEND_PRD.md`; the completed Petty Cash UI in `/Users/naif/Code/Packages/ui-lab` is the visual authority. The original stakeholder PRD is background. The backend PRD's PostgreSQL, class-validator and proxy suggestions are superseded by this repository's MySQL, Zod and direct-HTTP conventions.
++Explicit user decisions take precedence over `docs/PETTY_CASH_BACKEND_PRD.md`; the completed Petty Cash UI in `/Users/naif/Code/Packages/ui-lab` is the visual authority. The original stakeholder PRD is background. The backend PRD's PostgreSQL, class-validator and proxy suggestions are superseded by this repository's MySQL, Zod and direct-HTTP conventions.
+ 
+ Import and preserve ui-lab's Petty Cash screens: layout, spacing, copy, typography, colors, responsive tables/cards, modals and PDFs. Do not redesign them. Use documented `@pension/ui-kit` components for new states. UI-kit reference: https://ui-kit-dev.mpao.mv/mcp (docs-list, docs-show and composition guide). Current UI dependency matches the source: 1.0.39. Do not copy unrelated ui-lab applications or mock users/data.
+ 
+@@ -68,7 +68,7 @@ Node 22+, Yarn 1.22.22; GH_PAT for the private package registry. `yarn install`;
+ 
+ Apply migrations only to the intended fresh database with `yarn workspace petty-cash-api db:deploy`. The initial seed (`yarn workspace petty-cash-api db:seed`) uses the approved MVR 0, 2026-10-20, Team opening values and reuses FundBootstrapService. Keep the date fixed and preserve existing balances on reruns. For different approved values use the explicit bootstrap command (README). Never reset the copied source application's database.
+ 
+-`yarn workspace petty-cash-api test --runInBand` runs policy/streaming tests in `src/test`. Set FLOAT_TEST_DATABASE_URL to a dedicated database named float_test to additionally run MySQL workflow/concurrency tests. The financial suite intentionally appends data; it never clears a real fund. See `docs/IMPLEMENTATION.md` for verification and deployment status.
++`yarn workspace petty-cash-api test --runInBand` runs policy/streaming tests in `src/test`. Set PETTY_CASH_TEST_DATABASE_URL to a dedicated database named petty_cash_test to additionally run MySQL workflow/concurrency tests. The financial suite intentionally appends data; it never clears a real fund. See `docs/IMPLEMENTATION.md` for verification and deployment status.
+ 
+ ## Exclusions
+ 
+diff --git a/README.md b/README.md
+index c434d72..4d87e65 100644
+--- a/README.md
++++ b/README.md
+@@ -31,7 +31,7 @@ yarn lint
+ yarn workspace petty-cash-api test --runInBand
+ ```
+ 
+-Set `FLOAT_TEST_DATABASE_URL=mysql://.../float_test` for database integration tests. Use a dedicated test database; tests append activity and must never target production. Apply the same migrations to it first. Tests cover cash paths, audit immutability, concurrency, idempotency, every endpoint’s MPAO boundary, streamed bytes, bounded buffering, upload failure cleanup and retention of receipt evidence.
++Set `PETTY_CASH_TEST_DATABASE_URL=mysql://.../petty_cash_test` for database integration tests. Use a dedicated test database; tests append activity and must never target production. Apply the same migrations to it first. Tests cover cash paths, audit immutability, concurrency, idempotency, every endpoint’s MPAO boundary, streamed bytes, bounded buffering, upload failure cleanup and retention of receipt evidence.
+ 
+ ## Media storage
+ 
+@@ -62,7 +62,7 @@ Verify proxy/load-balancer request buffering is disabled for multipart traffic a
+ 
+ Set server-side `GEMINI_API_KEY` to enable Google AI receipt extraction; optional `GEMINI_RECEIPT_MODEL` defaults to `gemini-3.5-flash-lite`. After upload, a progress state appears while AI checks the document and extracts vendor/date/total/invoice/item details; the editable form opens afterwards. Multiple items fill “What was bought” separated by commas. Non-bill documents or AI failures show a message and open manual entry; they never block subsequent processing. See [receipt extraction](docs/RECEIPT_AI.md). Dynamics references are entered manually. Email delivery is not enabled.
+ 
+-See [AGENTS.md](AGENTS.md), [backend PRD](docs/FLOAT_BACKEND_PRD.md), and [implementation checklist](docs/IMPLEMENTATION.md).
++See [AGENTS.md](AGENTS.md), [backend PRD](docs/PETTY_CASH_BACKEND_PRD.md), and [implementation checklist](docs/IMPLEMENTATION.md).
+ 
+ ## API structure and configuration changes
+ 
+diff --git a/apps/petty-cash-api/.env.docker.example b/apps/petty-cash-api/.env.docker.example
+index 078e53c..151919f 100644
+--- a/apps/petty-cash-api/.env.docker.example
++++ b/apps/petty-cash-api/.env.docker.example
+@@ -4,7 +4,7 @@ APP_ENV=development
+ DATABASE_URL=
+ MPAO_ENTITY_ID=1
+ FILE_STORAGE=local
+-FILE_STORAGE_PATH=/var/lib/float/receipts
++FILE_STORAGE_PATH=/var/lib/petty-cash/receipts
+ GCS_RECEIPT_BUCKET=
+ CLIENT_ID=
+ CLIENT_SECRET=
+diff --git a/apps/petty-cash-api/prisma/schema.prisma b/apps/petty-cash-api/prisma/schema.prisma
+index ef5a133..9f8805b 100644
+--- a/apps/petty-cash-api/prisma/schema.prisma
++++ b/apps/petty-cash-api/prisma/schema.prisma
+@@ -17,14 +17,14 @@ model Fund {
+   custodian              String            @map("custodian")
+   description            String?           @map("description")
+   createdAt              DateTime          @default(now()) @map("created_at")
+-  requests               FloatRequest[]
++  requests               PettyCashRequest[]
+   transactions           FundTransaction[]
+   counts                 VaultCount[]
+ 
+   @@map("funds")
+ }
+ 
+-model FloatRequest {
++model PettyCashRequest {
+   id                   String            @id @map("id") @db.VarChar(40)
+   fundId               String            @map("fund_id") @db.VarChar(40)
+   fund                 Fund              @relation(fields: [fundId], references: [id])
+@@ -65,7 +65,7 @@ model FloatRequest {
+ model Expense {
+   id                 String       @id @default(uuid()) @map("id") @db.VarChar(40)
+   requestId          String       @map("request_id") @db.VarChar(40)
+-  request            FloatRequest @relation(fields: [requestId], references: [id])
++  request            PettyCashRequest @relation(fields: [requestId], references: [id])
+   supplierName       String       @map("supplier_name")
+   category           String?      @map("category")
+   invoiceNumber      String       @map("invoice_number")
+@@ -103,7 +103,7 @@ model ReceiptFile {
+ model CashIssuance {
+   id             String       @id @default(uuid()) @map("id") @db.VarChar(40)
+   requestId      String       @unique @map("request_id") @db.VarChar(40)
+-  request        FloatRequest @relation(fields: [requestId], references: [id])
++  request        PettyCashRequest @relation(fields: [requestId], references: [id])
+   amount         Decimal      @map("amount") @db.Decimal(14, 2)
+   issuedBy       String       @map("issued_by")
+   issuedAt       DateTime     @default(now()) @map("issued_at")
+@@ -117,7 +117,7 @@ model CashIssuance {
+ model CashReturn {
+   id             String       @id @default(uuid()) @map("id") @db.VarChar(40)
+   requestId      String       @unique @map("request_id") @db.VarChar(40)
+-  request        FloatRequest @relation(fields: [requestId], references: [id])
++  request        PettyCashRequest @relation(fields: [requestId], references: [id])
+   expectedAmount Decimal      @map("expected_amount") @db.Decimal(14, 2)
+   actualAmount   Decimal      @map("actual_amount") @db.Decimal(14, 2)
+   difference     Decimal      @map("difference") @db.Decimal(14, 2)
+@@ -140,7 +140,7 @@ model FundTransaction {
+   runningBalance Decimal       @map("running_balance") @db.Decimal(14, 2)
+   date           DateTime      @default(now()) @map("date")
+   requestId      String?       @map("request_id") @db.VarChar(40)
+-  request        FloatRequest? @relation(fields: [requestId], references: [id])
++  request        PettyCashRequest? @relation(fields: [requestId], references: [id])
+   reference      String        @map("reference")
+   recordedBy     String        @map("recorded_by")
+   actorId        String        @map("actor_id")
+@@ -176,7 +176,7 @@ model TimelineEvent {
+   sequence    Int          @id @default(autoincrement()) @map("sequence")
+   id          String       @unique @default(uuid()) @map("id") @db.VarChar(40)
+   requestId   String       @map("request_id") @db.VarChar(40)
+-  request     FloatRequest @relation(fields: [requestId], references: [id])
++  request     PettyCashRequest @relation(fields: [requestId], references: [id])
+   type        String       @map("type")
+   title       String       @map("title")
+   description String       @map("description") @db.Text
+diff --git a/apps/petty-cash-api/src/approvals/approvals.service.ts b/apps/petty-cash-api/src/approvals/approvals.service.ts
+index 6b77e95..35bad13 100644
+--- a/apps/petty-cash-api/src/approvals/approvals.service.ts
++++ b/apps/petty-cash-api/src/approvals/approvals.service.ts
+@@ -19,7 +19,7 @@ export class ApprovalsService {
+   async authorize(id: string, body: unknown, a: Actor) {
+     const d = parse(AuthorizeSchema, body);
+     return this.workflow.run(id, 'authorize', d, a, () => {
+-      const update: Prisma.FloatRequestUpdateInput = {};
++      const update: Prisma.PettyCashRequestUpdateInput = {};
+       update.status = 'pending_finance';
+       const type = 'approved';
+       const title = 'Approved by Manager';
+@@ -30,7 +30,7 @@ export class ApprovalsService {
+   async reject(id: string, body: unknown, a: Actor) {
+     const d = parse(RejectSchema, body);
+     return this.workflow.run(id, 'reject', d, a, () => {
+-      const update: Prisma.FloatRequestUpdateInput = {};
++      const update: Prisma.PettyCashRequestUpdateInput = {};
+       update.status = 'rejected';
+       update.rejectionReason = d.reason || 'Rejected by GS.';
+       const type = 'rejected';
+diff --git a/apps/petty-cash-api/src/common/request-records.service.ts b/apps/petty-cash-api/src/common/request-records.service.ts
+index 326f8b9..0540ebe 100644
+--- a/apps/petty-cash-api/src/common/request-records.service.ts
++++ b/apps/petty-cash-api/src/common/request-records.service.ts
+@@ -4,7 +4,7 @@ import {
+   type CashIssuance,
+   type CashReturn,
+   type Expense,
+-  type FloatRequest,
++  type PettyCashRequest,
+   type ReceiptFile,
+   type TimelineEvent,
+ } from '@prisma/client';
+@@ -15,7 +15,7 @@ import { pageQuery, type ListQuery } from './pagination';
+ import { allowedActions } from './request-policy';
+ import { wire } from './serialization';
+ import { parse } from './validation';
+-export type RequestRecord = FloatRequest & {
++export type RequestRecord = PettyCashRequest & {
+   expenses?: (Expense & { file?: ReceiptFile | null })[];
+   issuances?: CashIssuance[];
+   returns?: CashReturn[];
+@@ -63,7 +63,7 @@ export class RequestRecordsService {
+     });
+   }
+   async get(id: string, a: Actor, tx: Prisma.TransactionClient = this.db) {
+-    const r = await tx.floatRequest.findUnique({
++    const r = await tx.pettyCashRequest.findUnique({
+       where: { id },
+       include: requestDetail,
+     });
+@@ -74,7 +74,7 @@ export class RequestRecordsService {
+     const { page, pageSize } = parse(pageQuery, q);
+     const search = q.q?.trim();
+     const statuses = q.status?.split(',');
+-    const where: Prisma.FloatRequestWhereInput = {
++    const where: Prisma.PettyCashRequestWhereInput = {
+       ...(statuses ? { status: { in: statuses } } : {}),
+       ...(q.mine === 'true'
+         ? { requesterId: a.id }
+@@ -95,14 +95,14 @@ export class RequestRecordsService {
+     const sort = q.sort === 'closedAt' ? 'closedAt' : 'createdAt';
+     const order = q.order === 'asc' ? 'asc' : 'desc';
+     const [rows, total] = await this.db.$transaction([
+-      this.db.floatRequest.findMany({
++      this.db.pettyCashRequest.findMany({
+         where,
+         orderBy: [{ [sort]: order }, { id: order }],
+         skip: (page - 1) * pageSize,
+         take: pageSize,
+         include: { expenses: { where: { removedAt: null } } },
+       }),
+-      this.db.floatRequest.count({ where }),
++      this.db.pettyCashRequest.count({ where }),
+     ]);
+     return {
+       data: rows.map((r) => {
+diff --git a/apps/petty-cash-api/src/common/request-workflow.service.ts b/apps/petty-cash-api/src/common/request-workflow.service.ts
+index 1cefef3..12ab15b 100644
+--- a/apps/petty-cash-api/src/common/request-workflow.service.ts
++++ b/apps/petty-cash-api/src/common/request-workflow.service.ts
+@@ -12,9 +12,9 @@ import { NotificationWriterService } from './notification-writer.service';
+ import { ACTION_STATES, allowedActions } from './request-policy';
+ import { RequestRecordsService, requestDetail } from './request-records.service';
+ import { TransactionsService } from './transactions.service';
+-export type LockedRequest = Prisma.FloatRequestGetPayload<{ include: typeof requestDetail }>;
++export type LockedRequest = Prisma.PettyCashRequestGetPayload<{ include: typeof requestDetail }>;
+ export type RequestChange = {
+-  update: Prisma.FloatRequestUpdateInput;
++  update: Prisma.PettyCashRequestUpdateInput;
+   type: string;
+   title: string;
+   description: string;
+@@ -41,7 +41,7 @@ export class RequestWorkflowService {
+   ) {
+     const operation = async (tx: Prisma.TransactionClient) => {
+       await tx.$queryRaw`SELECT id FROM requests WHERE id = ${id} FOR UPDATE`;
+-      const request = await tx.floatRequest.findUnique({ where: { id }, include: requestDetail });
++      const request = await tx.pettyCashRequest.findUnique({ where: { id }, include: requestDetail });
+       if (!request) throw new NotFoundException('Request not found.');
+       if (!ACTION_STATES[action].includes(request.status))
+         throw new ConflictException(
+@@ -54,7 +54,7 @@ export class RequestWorkflowService {
+       const result = await change(tx, request);
+       if (!result) return this.records.get(id, actor, tx);
+       const { update, type, title, description } = result;
+-      await tx.floatRequest.update({
++      await tx.pettyCashRequest.update({
+         where: { id },
+         data: { ...update, version: { increment: 1 } },
+       });
+diff --git a/apps/petty-cash-api/src/disbursements/disbursements.service.ts b/apps/petty-cash-api/src/disbursements/disbursements.service.ts
+index 5775531..71f3bef 100644
+--- a/apps/petty-cash-api/src/disbursements/disbursements.service.ts
++++ b/apps/petty-cash-api/src/disbursements/disbursements.service.ts
+@@ -32,7 +32,7 @@ export class DisbursementsService {
+   async notifyCollection(id: string, body: unknown, a: Actor) {
+     const d = parse(NotifyCollectionSchema, body);
+     return this.workflow.run(id, 'notifyCollection', d, a, (_tx, r) => {
+-      const update: Prisma.FloatRequestUpdateInput = {};
++      const update: Prisma.PettyCashRequestUpdateInput = {};
+       if (!r.requestedAmount.equals(d.amount) && !d.reason)
+         throw new BadRequestException({
+           message: 'A reason is required when changing the amount.',
+@@ -57,7 +57,7 @@ export class DisbursementsService {
+       d,
+       a,
+       async (tx, r) => {
+-        const update: Prisma.FloatRequestUpdateInput = {};
++        const update: Prisma.PettyCashRequestUpdateInput = {};
+         await tx.cashIssuance.create({
+           data: {
+             requestId: id,
+diff --git a/apps/petty-cash-api/src/expenses/expenses.service.ts b/apps/petty-cash-api/src/expenses/expenses.service.ts
+index 0e6c956..11ab89d 100644
+--- a/apps/petty-cash-api/src/expenses/expenses.service.ts
++++ b/apps/petty-cash-api/src/expenses/expenses.service.ts
+@@ -68,7 +68,7 @@ export class ExpensesService {
+   async removeExpense(id: string, body: unknown, a: Actor, expenseId: string) {
+     const d = parse(RemoveExpenseSchema, body);
+     return this.workflow.run(id, 'removeExpense', d, a, async (tx) => {
+-      const update: Prisma.FloatRequestUpdateInput = {};
++      const update: Prisma.PettyCashRequestUpdateInput = {};
+       const result = await tx.expense.updateMany({
+         where: { id: expenseId, requestId: id, removedAt: null },
+         data: { removedAt: new Date(), removedBy: a.id },
+diff --git a/apps/petty-cash-api/src/fund/fund.service.ts b/apps/petty-cash-api/src/fund/fund.service.ts
+index 01cd8f9..8a93d3d 100644
+--- a/apps/petty-cash-api/src/fund/fund.service.ts
++++ b/apps/petty-cash-api/src/fund/fund.service.ts
+@@ -20,7 +20,7 @@ export class FundService {
+   async fund() {
+     const [fund, staff] = await this.db.$transaction([
+       this.db.fund.findUnique({ where: { id: FUND_ID } }),
+-      this.db.floatRequest.aggregate({
++      this.db.pettyCashRequest.aggregate({
+         where: { status: { in: active } },
+         _sum: { totalCashIssued: true },
+       }),
+diff --git a/apps/petty-cash-api/src/notifications/notifications.service.ts b/apps/petty-cash-api/src/notifications/notifications.service.ts
+index 0f88e49..9f134be 100644
+--- a/apps/petty-cash-api/src/notifications/notifications.service.ts
++++ b/apps/petty-cash-api/src/notifications/notifications.service.ts
+@@ -19,7 +19,7 @@ export class NotificationsService {
+   async sendReminder(id: string, body: unknown, a: Actor) {
+     const d = parse(SendReminderSchema, body);
+     return this.workflow.run(id, 'sendReminder', d, a, (_tx, r) => {
+-      const update: Prisma.FloatRequestUpdateInput = {};
++      const update: Prisma.PettyCashRequestUpdateInput = {};
+       if (r.lastReminderAt && Date.now() - r.lastReminderAt.getTime() < 86400000)
+         throw new ConflictException(
+           `A reminder was already sent at ${r.lastReminderAt.toISOString()}. Please wait 24 hours.`,
+diff --git a/apps/petty-cash-api/src/reports/reports.service.ts b/apps/petty-cash-api/src/reports/reports.service.ts
+index 681968b..8be42a4 100644
+--- a/apps/petty-cash-api/src/reports/reports.service.ts
++++ b/apps/petty-cash-api/src/reports/reports.service.ts
+@@ -24,7 +24,7 @@ export class ReportsService {
+           where: dateFilter(q, 'countDate'),
+           orderBy: { sequence: 'desc' },
+         });
+-        const staff = await tx.floatRequest.aggregate({
++        const staff = await tx.pettyCashRequest.aggregate({
+           where: { status: { in: active } },
+           _sum: { totalCashIssued: true },
+         });
+diff --git a/apps/petty-cash-api/src/requests/requests.service.ts b/apps/petty-cash-api/src/requests/requests.service.ts
+index 1f80863..e53fb4a 100644
+--- a/apps/petty-cash-api/src/requests/requests.service.ts
++++ b/apps/petty-cash-api/src/requests/requests.service.ts
+@@ -27,7 +27,7 @@ export class RequestsService {
+   async edit(id: string, body: unknown, a: Actor) {
+     const d = parse(EditSchema, body);
+     return this.workflow.run(id, 'edit', d, a, (_tx, r) => {
+-      const update: Prisma.FloatRequestUpdateInput = {};
++      const update: Prisma.PettyCashRequestUpdateInput = {};
+       const changes: string[] = [];
+       if (d.purpose !== undefined && d.purpose !== r.purpose) {
+         update.purpose = d.purpose;
+@@ -64,7 +64,7 @@ export class RequestsService {
+         update: { value: { increment: 1 } },
+       });
+       const id = `PC-${year}-${String(counter.value).padStart(4, '0')}`;
+-      await tx.floatRequest.create({
++      await tx.pettyCashRequest.create({
+         data: {
+           id,
+           fundId: FUND_ID,
+@@ -104,7 +104,7 @@ export class RequestsService {
+   // For now a request is visible to its creator, plus GS approvers and Finance, who need
+   // the detail page to authorize, prepare cash and finalize.
+   async get(id: string, a: Actor) {
+-    const r = await this.db.floatRequest.findUnique({
++    const r = await this.db.pettyCashRequest.findUnique({
+       where: { id },
+       select: { requesterId: true },
+     });
+diff --git a/apps/petty-cash-api/src/settlements/settlements.service.ts b/apps/petty-cash-api/src/settlements/settlements.service.ts
+index 5173161..74e7ba4 100644
+--- a/apps/petty-cash-api/src/settlements/settlements.service.ts
++++ b/apps/petty-cash-api/src/settlements/settlements.service.ts
+@@ -20,7 +20,7 @@ export class SettlementsService {
+   async settle(id: string, body: unknown, a: Actor) {
+     const d = parse(SettleSchema, body);
+     return this.workflow.run(id, 'settle', d, a, (_tx, r) => {
+-      const update: Prisma.FloatRequestUpdateInput = {};
++      const update: Prisma.PettyCashRequestUpdateInput = {};
+       const declared = Prisma.Decimal.max(
+         0,
+         r.totalCashIssued.sub(r.expenses.reduce((sum, e) => sum.add(e.amount), money(0))),
+@@ -37,7 +37,7 @@ export class SettlementsService {
+   async returnForCorrection(id: string, body: unknown, a: Actor) {
+     const d = parse(ReturnForCorrectionSchema, body);
+     return this.workflow.run(id, 'returnForCorrection', d, a, () => {
+-      const update: Prisma.FloatRequestUpdateInput = {};
++      const update: Prisma.PettyCashRequestUpdateInput = {};
+       update.status = 'returned_for_correction';
+       update.correctionNote = d.note;
+       const type = 'expense_returned';
+@@ -54,7 +54,7 @@ export class SettlementsService {
+       d,
+       a,
+       async (tx, r) => {
+-        const update: Prisma.FloatRequestUpdateInput = {};
++        const update: Prisma.PettyCashRequestUpdateInput = {};
+         const spent = r.expenses.reduce((sum, e) => sum.add(e.amount), money(0));
+         const balance = r.totalCashIssued.sub(spent);
+         const reference = d.dynamicsReference || id;
+diff --git a/apps/petty-cash-api/src/statistics/statistics.service.ts b/apps/petty-cash-api/src/statistics/statistics.service.ts
+index 5f882ab..fb6d13f 100644
+--- a/apps/petty-cash-api/src/statistics/statistics.service.ts
++++ b/apps/petty-cash-api/src/statistics/statistics.service.ts
+@@ -9,7 +9,7 @@ export class StatisticsService {
+   ) {}
+   async stats() {
+     const [groups, fund, last, unresolved] = await Promise.all([
+-      this.db.floatRequest.groupBy({ by: ['status'], _count: true }),
++      this.db.pettyCashRequest.groupBy({ by: ['status'], _count: true }),
+       this.fundService.fund(),
+       this.db.vaultCount.findFirst({ orderBy: { sequence: 'desc' } }),
+       this.db.vaultCount.count({ where: { status: 'discrepancy_pending' } }),
+diff --git a/apps/petty-cash-api/src/test/files.spec.ts b/apps/petty-cash-api/src/test/files.spec.ts
+index a54cce8..cbd434e 100644
+--- a/apps/petty-cash-api/src/test/files.spec.ts
++++ b/apps/petty-cash-api/src/test/files.spec.ts
+@@ -107,7 +107,7 @@ describe('multipart upload lifecycle', () => {
+     permissions: ['files.upload', 'files.download'],
+   };
+   beforeAll(async () => {
+-    directory = await mkdtemp(join(tmpdir(), 'float-upload-test-'));
++    directory = await mkdtemp(join(tmpdir(), 'petty-cash-upload-test-'));
+     await mkdir(join(directory, 'petty-cash'));
+     process.env.FILE_STORAGE = 'local';
+     process.env.FILE_STORAGE_PATH = directory;
+@@ -165,7 +165,7 @@ describe('multipart upload lifecycle', () => {
+             port,
+             method: 'POST',
+             headers: {
+-              'Content-Type': 'multipart/form-data; boundary=float-test',
++              'Content-Type': 'multipart/form-data; boundary=petty-cash-test',
+             },
+           },
+           (res) => {
+@@ -183,7 +183,7 @@ describe('multipart upload lifecycle', () => {
+       },
+     );
+     req!.write(
+-      `--float-test\r\nContent-Disposition: form-data; name="file"; filename="receipt.png"\r\nContent-Type: ${type}\r\n\r\n`,
++      `--petty-cash-test\r\nContent-Disposition: form-data; name="file"; filename="receipt.png"\r\nContent-Type: ${type}\r\n\r\n`,
+     );
+     return { req: req!, result };
+   }
+@@ -201,7 +201,7 @@ describe('multipart upload lifecycle', () => {
+     }
+     expect(written).toBe(true);
+     expect([...rows.values()].some((r) => r.state === 'ready')).toBe(false);
+-    req.end('\r\n--float-test--\r\n');
++    req.end('\r\n--petty-cash-test--\r\n');
+     const response = await result;
+     expect(response.status).toBe(200);
+     expect(response.body.size).toBe(4104);
+@@ -224,7 +224,7 @@ describe('multipart upload lifecycle', () => {
+       ['image/png', MAX_UPLOAD_BYTES, 413],
+     ] as const) {
+       const { req, result } = start(type);
+-      req.end(Buffer.concat([png, Buffer.alloc(size), Buffer.from('\r\n--float-test--\r\n')]));
++      req.end(Buffer.concat([png, Buffer.alloc(size), Buffer.from('\r\n--petty-cash-test--\r\n')]));
+       expect((await result).status).toBe(status);
+       expect((await readdir(join(directory, 'petty-cash'))).length).toBe(before);
+     }
+@@ -251,7 +251,7 @@ describe('multipart upload lifecycle', () => {
+     );
+     try {
+       const { req, result } = start();
+-      req.end(Buffer.concat([png, Buffer.alloc(100), Buffer.from('\r\n--float-test--\r\n')]));
++      req.end(Buffer.concat([png, Buffer.alloc(100), Buffer.from('\r\n--petty-cash-test--\r\n')]));
+       expect((await result).status).toBe(500);
+     } finally {
+       writer.mockRestore();
+diff --git a/apps/petty-cash-api/src/test/list-query.spec.ts b/apps/petty-cash-api/src/test/list-query.spec.ts
+index 66446d7..66a0a56 100644
+--- a/apps/petty-cash-api/src/test/list-query.spec.ts
++++ b/apps/petty-cash-api/src/test/list-query.spec.ts
+@@ -27,7 +27,7 @@ function setup() {
+     count: jest.fn<Promise<number>, [unknown?]>().mockResolvedValue(25),
+   });
+   const db = {
+-    floatRequest: delegate<Prisma.FloatRequestFindManyArgs>(),
++    pettyCashRequest: delegate<Prisma.PettyCashRequestFindManyArgs>(),
+     fundTransaction: delegate<Prisma.FundTransactionFindManyArgs>(),
+     notification: delegate<Prisma.NotificationFindManyArgs>(),
+     vaultCount: delegate<Prisma.VaultCountFindManyArgs>(),
+@@ -52,7 +52,7 @@ describe('list pagination and filters', () => {
+       },
+       actor,
+     );
+-    const query = db.floatRequest.findMany.mock.calls[0][0];
++    const query = db.pettyCashRequest.findMany.mock.calls[0][0];
+     expect(query).toMatchObject({
+       skip: 20,
+       take: 10,
+@@ -65,14 +65,14 @@ describe('list pagination and filters', () => {
+       { dynamicsReference: { contains: 'Paper & pens' } },
+       { requester: { path: '$.name', string_contains: 'Paper & pens' } },
+     ]);
+-    expect(db.floatRequest.count).toHaveBeenCalledWith({ where: query.where });
++    expect(db.pettyCashRequest.count).toHaveBeenCalledWith({ where: query.where });
+     expect(result).toMatchObject({ total: 25, page: 3, pageSize: 10 });
+   });
+ 
+   test('cleared or whitespace-only search removes text filtering', async () => {
+     const { db, prisma } = setup();
+     await new RequestRecordsService(prisma).list({ q: '   ' }, actor);
+-    expect(db.floatRequest.findMany.mock.calls[0][0].where?.OR).toBeUndefined();
++    expect(db.pettyCashRequest.findMany.mock.calls[0][0].where?.OR).toBeUndefined();
+   });
+ 
+   test.each(['list', 'history'] as const)(
+@@ -104,7 +104,7 @@ describe('list pagination and filters', () => {
+     'request detail owned by %s with %j for %s returns %s',
+     async (owner, permissions, viewer, status) => {
+       const db = {
+-        floatRequest: { findUnique: jest.fn().mockResolvedValue({ requesterId: owner }) },
++        pettyCashRequest: { findUnique: jest.fn().mockResolvedValue({ requesterId: owner }) },
+       };
+       const records = { get: jest.fn().mockResolvedValue({ id: 'PC-2026-0001' }) };
+       const service = new RequestsService(
+diff --git a/apps/petty-cash-api/src/test/float.integration.spec.ts b/apps/petty-cash-api/src/test/petty-cash.integration.spec.ts
+similarity index 98%
+rename from apps/petty-cash-api/src/test/float.integration.spec.ts
+rename to apps/petty-cash-api/src/test/petty-cash.integration.spec.ts
+index d27a091..8c0897a 100644
+--- a/apps/petty-cash-api/src/test/float.integration.spec.ts
++++ b/apps/petty-cash-api/src/test/petty-cash.integration.spec.ts
+@@ -42,10 +42,10 @@ import { FUND_ID } from '../common/constants';
+ import { today } from '../common/dates';
+ import { countTotal } from '../common/money';
+ import { allowedActions } from '../common/request-policy';
+-const integration = process.env.FLOAT_TEST_DATABASE_URL ? describe : describe.skip;
+-integration('Float MySQL financial workflow', () => {
++const integration = process.env.PETTY_CASH_TEST_DATABASE_URL ? describe : describe.skip;
++integration('Petty Cash MySQL financial workflow', () => {
+   const db = new PrismaService({
+-    datasourceUrl: process.env.FLOAT_TEST_DATABASE_URL,
++    datasourceUrl: process.env.PETTY_CASH_TEST_DATABASE_URL,
+   });
+   let module: TestingModule;
+   let app: INestApplication;
+@@ -128,12 +128,12 @@ integration('Float MySQL financial workflow', () => {
+     }
+   }
+   beforeAll(async () => {
+-    if (!process.env.FLOAT_TEST_DATABASE_URL?.includes('/float_test'))
+-      throw new Error('Integration tests require the isolated float_test database.');
++    if (!process.env.PETTY_CASH_TEST_DATABASE_URL?.includes('/petty_cash_test'))
++      throw new Error('Integration tests require the isolated petty_cash_test database.');
+     process.env.MPAO_ENTITY_ID = '1';
+     process.env.APP_NAME = 'petty-cash';
+     process.env.FILE_STORAGE = 'local';
+-    uploadDirectory = await mkdtemp(join(tmpdir(), 'float-http-'));
++    uploadDirectory = await mkdtemp(join(tmpdir(), 'petty-cash-http-'));
+     process.env.FILE_STORAGE_PATH = uploadDirectory;
+     module = await Test.createTestingModule({ imports: [IdentityTestModule, ...BUSINESS_MODULES] })
+       .overrideProvider(PrismaService)
+@@ -638,7 +638,7 @@ integration('Float MySQL financial workflow', () => {
+     expect(before).toBeGreaterThan(0);
+   });
+   test('attachments enforce ownership and cleanup retains removed receipt evidence', async () => {
+-    const directory = await mkdtemp(join(tmpdir(), 'float-cleanup-test-'));
++    const directory = await mkdtemp(join(tmpdir(), 'petty-cash-cleanup-test-'));
+     process.env.FILE_STORAGE = 'local';
+     process.env.FILE_STORAGE_PATH = directory;
+     const files = new FilesService(db, new StorageService());
+diff --git a/apps/petty-cash-api/test/visual-server.cjs b/apps/petty-cash-api/test/visual-server.cjs
+index e605f92..de9b548 100644
+--- a/apps/petty-cash-api/test/visual-server.cjs
++++ b/apps/petty-cash-api/test/visual-server.cjs
+@@ -6,11 +6,11 @@ const http = require('node:http');
+ const {createRequire} = require('node:module');
+ const root=path.resolve(__dirname,'../../..');
+ const req=createRequire(path.join(root,'package.json'));
+-if(!process.env.FLOAT_TEST_DATABASE_URL?.includes('/float_test'))throw new Error('Only an isolated float_test database is allowed.');
+-process.env.DATABASE_URL=process.env.FLOAT_TEST_DATABASE_URL;
++if(!process.env.PETTY_CASH_TEST_DATABASE_URL?.includes('/petty_cash_test'))throw new Error('Only an isolated petty_cash_test database is allowed.');
++process.env.DATABASE_URL=process.env.PETTY_CASH_TEST_DATABASE_URL;
+ process.env.MPAO_ENTITY_ID='1';process.env.APP_NAME='petty-cash';
+ process.env.FILE_STORAGE='local';process.env.APP_ENV='development';
+-const temp=fs.mkdtempSync(path.join(os.tmpdir(),'float-browser-'));process.env.FILE_STORAGE_PATH=path.join(temp,'receipts');
++const temp=fs.mkdtempSync(path.join(os.tmpdir(),'petty-cash-browser-'));process.env.FILE_STORAGE_PATH=path.join(temp,'receipts');
+ fs.writeFileSync(path.join(temp,'.env'),`APP_NAME=petty-cash\nAPP_ENV=production\nCLIENT_ID=test\nCLIENT_SECRET=test\nAUTH_ENDPOINT=http://127.0.0.1:4002\nJWT_PUB=${path.join(root,'apps/petty-cash-api/secrets/jwtRS256.key.pub')}\nJWT_LOGGING=production\n`);
+ process.chdir(temp);
+ const {Test}=req('@nestjs/testing');const {IdentityGuard}=req('@pension/midgard');
+@@ -30,7 +30,7 @@ async function main(){
+   if(r.url.startsWith('/test-login')){const role=new URL(r.url,'http://local').searchParams.get('role')||'gs';if(!users[role]){s.writeHead(400);s.end();return;}s.setHeader('Content-Type','text/html');s.end(`<script>localStorage.setItem('user',${JSON.stringify(JSON.stringify(users[role]))});localStorage.setItem('access_token','test-${role}');location.replace('/');</script>`);return;}
+   const upstream=http.request({hostname:'127.0.0.1',port:3002,path:r.url,method:r.method,headers:r.headers},response=>{s.writeHead(response.statusCode,response.headers);response.pipe(s);});upstream.on('error',()=>{s.writeHead(502);s.end('UI preview not running');});r.pipe(upstream);
+  });
+- proxy.listen(3001,'127.0.0.1',()=>console.log('Float QA: http://127.0.0.1:3001/test-login?role=gs'));
++ proxy.listen(3001,'127.0.0.1',()=>console.log('Petty Cash QA: http://127.0.0.1:3001/test-login?role=gs'));
+  const stop=async()=>{proxy.close();await app.close();fs.rmSync(temp,{recursive:true,force:true});process.exit();};process.once('SIGTERM',stop);process.once('SIGINT',stop);
+ }
+ main().catch(e=>{console.error(e);process.exit(1);});
+diff --git a/apps/petty-cash-ui/components/float/BanknoteCounter.vue b/apps/petty-cash-ui/components/petty-cash/BanknoteCounter.vue
+similarity index 89%
+rename from apps/petty-cash-ui/components/float/BanknoteCounter.vue
+rename to apps/petty-cash-ui/components/petty-cash/BanknoteCounter.vue
+index a0b160d..8d3eea4 100644
+--- a/apps/petty-cash-ui/components/float/BanknoteCounter.vue
++++ b/apps/petty-cash-ui/components/petty-cash/BanknoteCounter.vue
+@@ -3,7 +3,7 @@
+     class="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 bg-white"
+   >
+     <div
+-      v-for="item in FLOAT_DENOMINATIONS"
++      v-for="item in PETTY_CASH_DENOMINATIONS"
+       :key="item.key"
+       class="px-3 py-1.5 flex items-center justify-between gap-3 hover:bg-slate-50/70 transition-colors"
+     >
+@@ -59,18 +59,18 @@
+ </template>
+ 
+ <script setup lang="ts">
+-import { formatMoney } from '~/utils/floatFormat';
++import { formatMoney } from '~/utils/pettyCashFormat';
+ 
+ import { computed } from 'vue';
+ import { PoInputField, PoTypography } from '@pension/ui-kit';
+-import { FLOAT_DENOMINATIONS, denominationTotal, cashDifference } from '~/utils/floatStatus';
++import { PETTY_CASH_DENOMINATIONS, denominationTotal, cashDifference } from '~/utils/pettyCashStatus';
+ 
+ const props = defineProps<{ expected?: number }>();
+ const counts = defineModel<Record<string, number | ''>>({ required: true });
+ 
+ const total = computed(() => denominationTotal(counts.value));
+ const pieces = computed(() =>
+-  FLOAT_DENOMINATIONS.reduce((sum, d) => sum + (Number(counts.value[d.key]) || 0), 0),
++  PETTY_CASH_DENOMINATIONS.reduce((sum, d) => sum + (Number(counts.value[d.key]) || 0), 0),
+ );
+ const difference = computed(() => cashDifference(total.value, props.expected ?? 0));
+ </script>
+diff --git a/apps/petty-cash-ui/components/float/BulkReceiptsModal.vue b/apps/petty-cash-ui/components/petty-cash/BulkReceiptsModal.vue
+similarity index 98%
+rename from apps/petty-cash-ui/components/float/BulkReceiptsModal.vue
+rename to apps/petty-cash-ui/components/petty-cash/BulkReceiptsModal.vue
+index 5aec6f3..6c481da 100644
+--- a/apps/petty-cash-ui/components/float/BulkReceiptsModal.vue
++++ b/apps/petty-cash-ui/components/petty-cash/BulkReceiptsModal.vue
+@@ -244,11 +244,11 @@ import {
+   useToastify,
+ } from '@pension/ui-kit';
+ import { useBulkReceipts, type BulkReceiptRow } from '~/composables/useBulkReceipts';
+-import { useFloatStore } from '~/stores/useFloatStore';
+-import { formatMoney } from '~/utils/floatFormat';
++import { usePettyCashStore } from '~/stores/usePettyCashStore';
++import { formatMoney } from '~/utils/pettyCashFormat';
+ const props = defineProps<{ show: boolean; requestId: string }>();
+ const emit = defineEmits<{ close: [] }>();
+-const store = useFloatStore();
++const store = usePettyCashStore();
+ const { showToast } = useToastify();
+ const {
+   rows,
+diff --git a/apps/petty-cash-ui/components/float/ListRow.vue b/apps/petty-cash-ui/components/petty-cash/ListRow.vue
+similarity index 100%
+rename from apps/petty-cash-ui/components/float/ListRow.vue
+rename to apps/petty-cash-ui/components/petty-cash/ListRow.vue
+diff --git a/apps/petty-cash-ui/components/float/ListTable.vue b/apps/petty-cash-ui/components/petty-cash/ListTable.vue
+similarity index 100%
+rename from apps/petty-cash-ui/components/float/ListTable.vue
+rename to apps/petty-cash-ui/components/petty-cash/ListTable.vue
+diff --git a/apps/petty-cash-ui/components/float/NotifyCollectionModal.vue b/apps/petty-cash-ui/components/petty-cash/NotifyCollectionModal.vue
+similarity index 95%
+rename from apps/petty-cash-ui/components/float/NotifyCollectionModal.vue
+rename to apps/petty-cash-ui/components/petty-cash/NotifyCollectionModal.vue
+index 4381f2f..53e2d6a 100644
+--- a/apps/petty-cash-ui/components/float/NotifyCollectionModal.vue
++++ b/apps/petty-cash-ui/components/petty-cash/NotifyCollectionModal.vue
+@@ -55,7 +55,7 @@
+ </template>
+ 
+ <script setup lang="ts">
+-import { formatMoney } from '~/utils/floatFormat';
++import { formatMoney } from '~/utils/pettyCashFormat';
+ 
+ import { computed, ref, watch } from 'vue';
+ import { BellAlertIcon } from '@heroicons/vue/20/solid';
+@@ -68,13 +68,13 @@ import {
+   PoTextarea,
+   useToastify,
+ } from '@pension/ui-kit';
+-import { useFloatStore } from '~/stores/useFloatStore';
+-import type { PettyCashSummary as PettyCashRequest } from '~/types/float';
++import { usePettyCashStore } from '~/stores/usePettyCashStore';
++import type { PettyCashSummary as PettyCashRequest } from '~/types/pettyCash';
+ 
+ const props = defineProps<{ show: boolean; request: PettyCashRequest | null }>();
+ const emit = defineEmits<{ close: [] }>();
+ 
+-const store = useFloatStore();
++const store = usePettyCashStore();
+ const { showToast } = useToastify();
+ 
+ const amount = ref('');
+diff --git a/apps/petty-cash-ui/components/float/PageSkeleton.vue b/apps/petty-cash-ui/components/petty-cash/PageSkeleton.vue
+similarity index 100%
+rename from apps/petty-cash-ui/components/float/PageSkeleton.vue
+rename to apps/petty-cash-ui/components/petty-cash/PageSkeleton.vue
+diff --git a/apps/petty-cash-ui/components/float/PettyCashRequestModal.vue b/apps/petty-cash-ui/components/petty-cash/PettyCashRequestModal.vue
+similarity index 94%
+rename from apps/petty-cash-ui/components/float/PettyCashRequestModal.vue
+rename to apps/petty-cash-ui/components/petty-cash/PettyCashRequestModal.vue
+index d2170bb..6fad424 100644
+--- a/apps/petty-cash-ui/components/float/PettyCashRequestModal.vue
++++ b/apps/petty-cash-ui/components/petty-cash/PettyCashRequestModal.vue
+@@ -55,16 +55,16 @@ import {
+   PoTypography,
+   useToastify,
+ } from '@pension/ui-kit';
+-import { useFloatStore } from '~/stores/useFloatStore';
+-import { formatMoney } from '~/utils/floatFormat';
+-import { MAX_REQUEST_AMOUNT } from '~/utils/floatStatus';
+-import type { PettyCashSummary as PettyCashRequest } from '~/types/float';
++import { usePettyCashStore } from '~/stores/usePettyCashStore';
++import { formatMoney } from '~/utils/pettyCashFormat';
++import { MAX_REQUEST_AMOUNT } from '~/utils/pettyCashStatus';
++import type { PettyCashSummary as PettyCashRequest } from '~/types/pettyCash';
+ 
+ // Pass `request` to edit an existing request; omit it to create a new one.
+ const props = defineProps<{ show: boolean; request?: PettyCashRequest | null }>();
+ const emit = defineEmits<{ close: [] }>();
+ 
+-const store = useFloatStore();
++const store = usePettyCashStore();
+ const { showToast } = useToastify();
+ 
+ const today = new Intl.DateTimeFormat('en-CA', {
+diff --git a/apps/petty-cash-ui/components/float/FloatStats.vue b/apps/petty-cash-ui/components/petty-cash/PettyCashStats.vue
+similarity index 92%
+rename from apps/petty-cash-ui/components/float/FloatStats.vue
+rename to apps/petty-cash-ui/components/petty-cash/PettyCashStats.vue
+index f28bbb7..6c8c919 100644
+--- a/apps/petty-cash-ui/components/float/FloatStats.vue
++++ b/apps/petty-cash-ui/components/petty-cash/PettyCashStats.vue
+@@ -9,9 +9,9 @@
+ import { computed } from 'vue';
+ import { BanknotesIcon, ClockIcon, ScaleIcon, WalletIcon } from '@heroicons/vue/20/solid';
+ import { PoStatsBlock } from '@pension/ui-kit';
+-import { useFloatStore } from '~/stores/useFloatStore';
++import { usePettyCashStore } from '~/stores/usePettyCashStore';
+ 
+-const store = useFloatStore();
++const store = usePettyCashStore();
+ 
+ const stats = computed(() => [
+   {
+diff --git a/apps/petty-cash-ui/components/float/ReceiptAttachmentPreview.vue b/apps/petty-cash-ui/components/petty-cash/ReceiptAttachmentPreview.vue
+similarity index 100%
+rename from apps/petty-cash-ui/components/float/ReceiptAttachmentPreview.vue
+rename to apps/petty-cash-ui/components/petty-cash/ReceiptAttachmentPreview.vue
+diff --git a/apps/petty-cash-ui/components/float/ReceiptScanModal.vue b/apps/petty-cash-ui/components/petty-cash/ReceiptScanModal.vue
+similarity index 99%
+rename from apps/petty-cash-ui/components/float/ReceiptScanModal.vue
+rename to apps/petty-cash-ui/components/petty-cash/ReceiptScanModal.vue
+index dee2ac7..b30f88f 100644
+--- a/apps/petty-cash-ui/components/float/ReceiptScanModal.vue
++++ b/apps/petty-cash-ui/components/petty-cash/ReceiptScanModal.vue
+@@ -193,12 +193,12 @@ import {
+   PoTypography,
+   useToastify,
+ } from '@pension/ui-kit';
+-import { useFloatStore } from '~/stores/useFloatStore';
++import { usePettyCashStore } from '~/stores/usePettyCashStore';
+ 
+ const props = defineProps<{ show: boolean; requestId: string }>();
+ const emit = defineEmits<{ close: [] }>();
+ 
+-const store = useFloatStore();
++const store = usePettyCashStore();
+ const { showToast } = useToastify();
+ 
+ const categoryOptions = [
+diff --git a/apps/petty-cash-ui/components/float/RequestPagination.vue b/apps/petty-cash-ui/components/petty-cash/RequestPagination.vue
+similarity index 92%
+rename from apps/petty-cash-ui/components/float/RequestPagination.vue
+rename to apps/petty-cash-ui/components/petty-cash/RequestPagination.vue
+index c37a85f..e760310 100644
+--- a/apps/petty-cash-ui/components/float/RequestPagination.vue
++++ b/apps/petty-cash-ui/components/petty-cash/RequestPagination.vue
+@@ -22,8 +22,8 @@
+ </template>
+ <script setup lang="ts">
+ import { PoButton, PoTypography, useToastify } from '@pension/ui-kit';
+-import { useFloatStore } from '~/stores/useFloatStore';
+-const store = useFloatStore();
++import { usePettyCashStore } from '~/stores/usePettyCashStore';
++const store = usePettyCashStore();
+ const route = useRoute();
+ const { showToast } = useToastify();
+ async function change(page: number) {
+diff --git a/apps/petty-cash-ui/components/float/StaffAssignmentSection.vue b/apps/petty-cash-ui/components/petty-cash/StaffAssignmentSection.vue
+similarity index 98%
+rename from apps/petty-cash-ui/components/float/StaffAssignmentSection.vue
+rename to apps/petty-cash-ui/components/petty-cash/StaffAssignmentSection.vue
+index 22c5ef3..ecb7899 100644
+--- a/apps/petty-cash-ui/components/float/StaffAssignmentSection.vue
++++ b/apps/petty-cash-ui/components/petty-cash/StaffAssignmentSection.vue
+@@ -189,16 +189,16 @@ import {
+ } from '@pension/ui-kit';
+ import ListRow, { type ListCell } from './ListRow.vue';
+ import ListTable, { type ListColumn } from './ListTable.vue';
+-import { useFloatStore } from '~/stores/useFloatStore';
++import { usePettyCashStore } from '~/stores/usePettyCashStore';
+ import type { StaffAssignment, StaffAssignmentType, StaffEmployee } from '~/types/staffAssignments';
+-import { formatDate } from '~/utils/floatFormat';
++import { formatDate } from '~/utils/pettyCashFormat';
+ const props = defineProps<{
+   type: StaffAssignmentType;
+   title: string;
+   description: string;
+   emptyLabel: string;
+ }>();
+-const store = useFloatStore();
++const store = usePettyCashStore();
+ const { showToast } = useToastify();
+ const assignments = computed(() => store.staffAssignments.filter((row) => row.type === props.type));
+ const canAdd = computed(
+diff --git a/apps/petty-cash-ui/layouts/main.vue b/apps/petty-cash-ui/layouts/main.vue
+index 5c7e102..0469a99 100644
+--- a/apps/petty-cash-ui/layouts/main.vue
++++ b/apps/petty-cash-ui/layouts/main.vue
+@@ -19,7 +19,7 @@
+         @on-mark-as-read-click="markVisibleRead"
+       >
+         <template #appIcon
+-          ><img src="/images/appicons/float.svg" alt="Petty Cash" class="w-8 h-8"
++          ><img src="/images/appicons/petty-cash.svg" alt="Petty Cash" class="w-8 h-8"
+         /></template>
+       </PoTopBar>
+       <PoOrgSelector
+@@ -67,13 +67,13 @@ import {
+   PoMessage,
+   PoButton,
+ } from '@pension/ui-kit';
+-import PageSkeleton from '~/components/float/PageSkeleton.vue';
++import PageSkeleton from '~/components/petty-cash/PageSkeleton.vue';
+ import allNavigation from '~/config/navigation';
+-import { useFloatStore } from '~/stores/useFloatStore';
++import { usePettyCashStore } from '~/stores/usePettyCashStore';
+ const route = useRoute(),
+   router = useRouter(),
+   identity = useIdentity(),
+-  store = useFloatStore();
++  store = usePettyCashStore();
+ const renderPage = computed(
+   () =>
+     !!identity.user?.value?.transacting_as &&
+diff --git a/apps/petty-cash-ui/pages/approvals.vue b/apps/petty-cash-ui/pages/approvals.vue
+index d067206..648d614 100644
+--- a/apps/petty-cash-ui/pages/approvals.vue
++++ b/apps/petty-cash-ui/pages/approvals.vue
+@@ -13,7 +13,7 @@
+     <PageSkeleton v-if="!store.isPageReady('/approvals')" :stats="4" />
+ 
+     <div v-else class="space-y-5 pb-8">
+-      <FloatStats />
++      <PettyCashStats />
+ 
+       <PoCard>
+         <ListTable v-if="pendingRequests.length > 0" :columns="columns">
+@@ -109,10 +109,10 @@
+ </template>
+ 
+ <script setup lang="ts">
+-import PageSkeleton from '~/components/float/PageSkeleton.vue';
+-import { formatDate, formatMoney } from '~/utils/floatFormat';
++import PageSkeleton from '~/components/petty-cash/PageSkeleton.vue';
++import { formatDate, formatMoney } from '~/utils/pettyCashFormat';
+ 
+-import RequestPagination from '~/components/float/RequestPagination.vue';
++import RequestPagination from '~/components/petty-cash/RequestPagination.vue';
+ import { computed, ref } from 'vue';
+ import { CheckCircleIcon, CheckIcon, XMarkIcon } from '@heroicons/vue/20/solid';
+ import {
+@@ -126,11 +126,11 @@ import {
+   PoTextarea,
+   useToastify,
+ } from '@pension/ui-kit';
+-import FloatStats from '~/components/float/FloatStats.vue';
+-import ListRow, { type ListCell } from '~/components/float/ListRow.vue';
+-import ListTable, { type ListColumn } from '~/components/float/ListTable.vue';
+-import { useFloatStore } from '~/stores/useFloatStore';
+-import type { PettyCashSummary as PettyCashRequest } from '~/types/float';
++import PettyCashStats from '~/components/petty-cash/PettyCashStats.vue';
++import ListRow, { type ListCell } from '~/components/petty-cash/ListRow.vue';
++import ListTable, { type ListColumn } from '~/components/petty-cash/ListTable.vue';
++import { usePettyCashStore } from '~/stores/usePettyCashStore';
++import type { PettyCashSummary as PettyCashRequest } from '~/types/pettyCash';
+ 
+ definePageMeta({
+   layout: 'main',
+@@ -140,7 +140,7 @@ useHead({
+   title: 'Petty Cash — GS Approvals',
+ });
+ 
+-const store = useFloatStore();
++const store = usePettyCashStore();
+ const { showToast } = useToastify();
+ 
+ const pendingRequests = computed(() =>
+diff --git a/apps/petty-cash-ui/pages/finance.vue b/apps/petty-cash-ui/pages/finance.vue
+index 3d5a6b1..79732ba 100644
+--- a/apps/petty-cash-ui/pages/finance.vue
++++ b/apps/petty-cash-ui/pages/finance.vue
+@@ -13,7 +13,7 @@
+     <PageSkeleton v-if="!store.isPageReady('/finance')" :stats="4" />
+ 
+     <div v-else class="space-y-5 pb-8">
+-      <FloatStats />
++      <PettyCashStats />
+ 
+       <PoTabs :tabs="tabs" :current-tab="activeTab" @button-click="changeTab" />
+ 
+@@ -26,7 +26,7 @@
+             :title="item.purpose"
+             :meta="`${item.id} · ${item.requester.name}`"
+             :amount="formatMoney(rowAmount(item))"
+-            :status="showStatus(item) ? floatStatus(item.status) : undefined"
++            :status="showStatus(item) ? pettyCashStatus(item.status) : undefined"
+             :cells="cells(item)"
+           >
+             <template
+@@ -87,10 +87,10 @@
+ </template>
+ 
+ <script setup lang="ts">
+-import PageSkeleton from '~/components/float/PageSkeleton.vue';
+-import { formatMoney } from '~/utils/floatFormat';
++import PageSkeleton from '~/components/petty-cash/PageSkeleton.vue';
++import { formatMoney } from '~/utils/pettyCashFormat';
+ 
+-import RequestPagination from '~/components/float/RequestPagination.vue';
++import RequestPagination from '~/components/petty-cash/RequestPagination.vue';
+ import { computed, ref } from 'vue';
+ import { useRouter } from 'vue-router';
+ import {
+@@ -113,13 +113,13 @@ import {
+   type Tab,
+   useToastify,
+ } from '@pension/ui-kit';
+-import FloatStats from '~/components/float/FloatStats.vue';
+-import ListRow, { type ListCell } from '~/components/float/ListRow.vue';
+-import ListTable, { type ListColumn } from '~/components/float/ListTable.vue';
+-import NotifyCollectionModal from '~/components/float/NotifyCollectionModal.vue';
+-import { useFloatStore } from '~/stores/useFloatStore';
+-import type { PettyCashSummary as PettyCashRequest, RequestStatus } from '~/types/float';
+-import { floatAmount, floatStatus } from '~/utils/floatStatus';
++import PettyCashStats from '~/components/petty-cash/PettyCashStats.vue';
++import ListRow, { type ListCell } from '~/components/petty-cash/ListRow.vue';
++import ListTable, { type ListColumn } from '~/components/petty-cash/ListTable.vue';
++import NotifyCollectionModal from '~/components/petty-cash/NotifyCollectionModal.vue';
++import { usePettyCashStore } from '~/stores/usePettyCashStore';
++import type { PettyCashSummary as PettyCashRequest, RequestStatus } from '~/types/pettyCash';
++import { pettyCashAmount, pettyCashStatus } from '~/utils/pettyCashStatus';
+ 
+ definePageMeta({
+   layout: 'main',
+@@ -130,7 +130,7 @@ useHead({
+ });
+ 
+ const router = useRouter();
+-const store = useFloatStore();
++const store = usePettyCashStore();
+ const { showToast } = useToastify();
+ 
+ const TAB_HEADS_UP = 'Heads-up';
+@@ -228,7 +228,7 @@ function showStatus(req: PettyCashRequest): boolean {
+ }
+ 
+ function rowAmount(req: PettyCashRequest): number {
+-  return req.totalCashIssued || floatAmount(req);
++  return req.totalCashIssued || pettyCashAmount(req);
+ }
+ 
+ // Notify for collection
+@@ -269,7 +269,7 @@ function cells(item: PettyCashRequest): ListCell[] {
+       align: 'right',
+       class: 'tabular-nums font-semibold text-slate-900',
+     },
+-    showStatus(item) ? { status: floatStatus(item.status) } : {},
++    showStatus(item) ? { status: pettyCashStatus(item.status) } : {},
+   ];
+ }
+ </script>
+diff --git a/apps/petty-cash-ui/pages/fund.vue b/apps/petty-cash-ui/pages/fund.vue
+index f91c7f0..0f2ef6e 100644
+--- a/apps/petty-cash-ui/pages/fund.vue
++++ b/apps/petty-cash-ui/pages/fund.vue
+@@ -135,8 +135,8 @@
+ </template>
+ 
+ <script setup lang="ts">
+-import PageSkeleton from '~/components/float/PageSkeleton.vue';
+-import { formatDate, formatMoney } from '~/utils/floatFormat';
++import PageSkeleton from '~/components/petty-cash/PageSkeleton.vue';
++import { formatDate, formatMoney } from '~/utils/pettyCashFormat';
+ 
+ import { computed, reactive, ref } from 'vue';
+ import { BanknotesIcon, CalendarDaysIcon, PlusIcon, UserGroupIcon } from '@heroicons/vue/20/solid';
+@@ -153,10 +153,10 @@ import {
+   PoTypography,
+   useToastify,
+ } from '@pension/ui-kit';
+-import ListRow, { type ListCell } from '~/components/float/ListRow.vue';
+-import ListTable, { type ListColumn } from '~/components/float/ListTable.vue';
+-import type { FundTransaction } from '~/types/float';
+-import { useFloatStore } from '~/stores/useFloatStore';
++import ListRow, { type ListCell } from '~/components/petty-cash/ListRow.vue';
++import ListTable, { type ListColumn } from '~/components/petty-cash/ListTable.vue';
++import type { FundTransaction } from '~/types/pettyCash';
++import { usePettyCashStore } from '~/stores/usePettyCashStore';
+ 
+ definePageMeta({
+   layout: 'main',
+@@ -166,7 +166,7 @@ useHead({
+   title: 'Fund Ledger — Petty Cash',
+ });
+ 
+-const store = useFloatStore();
++const store = usePettyCashStore();
+ const { showToast } = useToastify();
+ 
+ const showTopUpModal = ref(false);
+diff --git a/apps/petty-cash-ui/pages/index.vue b/apps/petty-cash-ui/pages/index.vue
+index bb42ff3..e9d3112 100644
+--- a/apps/petty-cash-ui/pages/index.vue
++++ b/apps/petty-cash-ui/pages/index.vue
+@@ -13,7 +13,7 @@
+     <PageSkeleton v-if="!store.isPageReady('/')" :stats="4" />
+ 
+     <div v-else class="space-y-6 pb-8">
+-      <FloatStats />
++      <PettyCashStats />
+ 
+       <section class="space-y-3">
+         <div
+@@ -44,8 +44,8 @@
+               :to="`/requests/${item.id}`"
+               :title="item.purpose"
+               :meta="`${item.id} · ${formatDate(item.createdAt)}`"
+-              :amount="formatMoney(floatAmount(item))"
+-              :status="floatStatus(item.status)"
++              :amount="formatMoney(pettyCashAmount(item))"
++              :status="pettyCashStatus(item.status)"
+               :cells="cells(item)"
+             >
+               <template
+@@ -109,10 +109,10 @@
+ </template>
+ 
+ <script setup lang="ts">
+-import PageSkeleton from '~/components/float/PageSkeleton.vue';
+-import { formatDate, formatMoney } from '~/utils/floatFormat';
++import PageSkeleton from '~/components/petty-cash/PageSkeleton.vue';
++import { formatDate, formatMoney } from '~/utils/pettyCashFormat';
+ 
+-import RequestPagination from '~/components/float/RequestPagination.vue';
++import RequestPagination from '~/components/petty-cash/RequestPagination.vue';
+ import { computed, ref } from 'vue';
+ import { useRouter } from 'vue-router';
+ import {
+@@ -132,13 +132,13 @@ import {
+   PoStatusPill,
+   useToastify,
+ } from '@pension/ui-kit';
+-import FloatStats from '~/components/float/FloatStats.vue';
+-import ListRow, { type ListCell } from '~/components/float/ListRow.vue';
+-import ListTable, { type ListColumn } from '~/components/float/ListTable.vue';
+-import PettyCashRequestModal from '~/components/float/PettyCashRequestModal.vue';
+-import { useFloatStore } from '~/stores/useFloatStore';
+-import type { PettyCashSummary as PettyCashRequest, RequestStatus } from '~/types/float';
+-import { floatAmount, floatStatus } from '~/utils/floatStatus';
++import PettyCashStats from '~/components/petty-cash/PettyCashStats.vue';
++import ListRow, { type ListCell } from '~/components/petty-cash/ListRow.vue';
++import ListTable, { type ListColumn } from '~/components/petty-cash/ListTable.vue';
++import PettyCashRequestModal from '~/components/petty-cash/PettyCashRequestModal.vue';
++import { usePettyCashStore } from '~/stores/usePettyCashStore';
++import type { PettyCashSummary as PettyCashRequest, RequestStatus } from '~/types/pettyCash';
++import { pettyCashAmount, pettyCashStatus } from '~/utils/pettyCashStatus';
+ 
+ definePageMeta({
+   layout: 'main',
+@@ -149,7 +149,7 @@ useHead({
+ });
+ 
+ const router = useRouter();
+-const store = useFloatStore();
++const store = usePettyCashStore();
+ const { showToast } = useToastify();
+ 
+ const INACTIVE: RequestStatus[] = ['closed', 'rejected', 'cancelled'];
+@@ -163,7 +163,7 @@ const myActiveRequests = computed(() =>
+ async function handleConfirmReceived(req: PettyCashRequest) {
+   try {
+     await store.collectCash(req.id);
+-    showToast(`Receipt of MVR ${formatMoney(floatAmount(req))} confirmed`, 'success');
++    showToast(`Receipt of MVR ${formatMoney(pettyCashAmount(req))} confirmed`, 'success');
+   } catch (err) {
+     showToast(err instanceof Error ? err.message : 'Could not complete this action.', 'error');
+   }
+@@ -199,11 +199,11 @@ function cells(item: PettyCashRequest): ListCell[] {
+     { text: item.id, to: `/requests/${item.id}` },
+     { text: item.purpose, wrap: true },
+     {
+-      text: formatMoney(floatAmount(item)),
++      text: formatMoney(pettyCashAmount(item)),
+       align: 'right',
+       class: 'tabular-nums font-semibold text-slate-900',
+     },
+-    { status: floatStatus(item.status) },
++    { status: pettyCashStatus(item.status) },
+   ];
+ }
+ </script>
+diff --git a/apps/petty-cash-ui/pages/notifications.vue b/apps/petty-cash-ui/pages/notifications.vue
+index 5a87bce..37837e1 100644
+--- a/apps/petty-cash-ui/pages/notifications.vue
++++ b/apps/petty-cash-ui/pages/notifications.vue
+@@ -34,7 +34,7 @@
+   ></PoContentArea>
+ </template>
+ <script setup lang="ts">
+-import PageSkeleton from '~/components/float/PageSkeleton.vue';
++import PageSkeleton from '~/components/petty-cash/PageSkeleton.vue';
+ import {
+   PoContentArea,
+   PoPageTitle,
+@@ -44,9 +44,9 @@ import {
+   PoEmpty,
+   useToastify,
+ } from '@pension/ui-kit';
+-import { useFloatStore } from '~/stores/useFloatStore';
++import { usePettyCashStore } from '~/stores/usePettyCashStore';
+ definePageMeta({ layout: 'main' });
+-const store = useFloatStore(),
++const store = usePettyCashStore(),
+   router = useRouter(),
+   page = computed(() => store.notificationPage);
+ const { showToast } = useToastify();
+diff --git a/apps/petty-cash-ui/pages/reconciliation.vue b/apps/petty-cash-ui/pages/reconciliation.vue
+index 8f87b46..5c4c916 100644
+--- a/apps/petty-cash-ui/pages/reconciliation.vue
++++ b/apps/petty-cash-ui/pages/reconciliation.vue
+@@ -422,8 +422,8 @@
+ </template>
+ 
+ <script setup lang="ts">
+-import PageSkeleton from '~/components/float/PageSkeleton.vue';
+-import { formatDate, formatMoney } from '~/utils/floatFormat';
++import PageSkeleton from '~/components/petty-cash/PageSkeleton.vue';
++import { formatDate, formatMoney } from '~/utils/pettyCashFormat';
+ 
+ import { computed, reactive, ref } from 'vue';
+ import {
+@@ -450,17 +450,17 @@ import {
+   PoTypography,
+   useToastify,
+ } from '@pension/ui-kit';
+-import ListRow, { type ListCell } from '~/components/float/ListRow.vue';
+-import ListTable, { type ListColumn } from '~/components/float/ListTable.vue';
+-import { useFloatStore } from '~/stores/useFloatStore';
+-import type { DailyReconciliation } from '~/types/float';
++import ListRow, { type ListCell } from '~/components/petty-cash/ListRow.vue';
++import ListTable, { type ListColumn } from '~/components/petty-cash/ListTable.vue';
++import { usePettyCashStore } from '~/stores/usePettyCashStore';
++import type { DailyReconciliation } from '~/types/pettyCash';
+ import {
+-  FLOAT_DENOMINATIONS,
++  PETTY_CASH_DENOMINATIONS,
+   cashDifference,
+   emptyDenominationCounts,
+   denominationTotal,
+-} from '~/utils/floatStatus';
+-import { downloadReconciliationReport, downloadVaultCountPdf } from '~/utils/floatPdf';
++} from '~/utils/pettyCashStatus';
++import { downloadReconciliationReport, downloadVaultCountPdf } from '~/utils/pettyCashPdf';
+ 
+ definePageMeta({
+   layout: 'main',
+@@ -470,7 +470,7 @@ useHead({
+   title: 'Vault Reconciliation — Petty Cash',
+ });
+ 
+-const store = useFloatStore();
++const store = usePettyCashStore();
+ const { showToast } = useToastify();
+ 
+ async function changeCountPage(page: number) {
+@@ -487,11 +487,11 @@ const showRareCoins = ref(false);
+ const notes = ref('');
+ 
+ const denomCounts = reactive(emptyDenominationCounts());
+-const banknoteDenominations = FLOAT_DENOMINATIONS.filter((d) => d.key.startsWith('note'));
+-const coinDenominations = FLOAT_DENOMINATIONS.filter(
++const banknoteDenominations = PETTY_CASH_DENOMINATIONS.filter((d) => d.key.startsWith('note'));
++const coinDenominations = PETTY_CASH_DENOMINATIONS.filter(
+   (d) => d.key.startsWith('coin') && d.value >= 1,
+ );
+-const rareCoinDenominations = FLOAT_DENOMINATIONS.filter((d) => d.value < 1);
++const rareCoinDenominations = PETTY_CASH_DENOMINATIONS.filter((d) => d.value < 1);
+ 
+ const totalBanknotes = computed(() => {
+   return (
+@@ -519,14 +519,14 @@ const totalRareCoins = computed(() => {
+ 
+ const submittedCounts = computed(() =>
+   Object.fromEntries(
+-    FLOAT_DENOMINATIONS.map((d) => [
++    PETTY_CASH_DENOMINATIONS.map((d) => [
+       d.key,
+       d.value < 1 && !showRareCoins.value ? 0 : Number(denomCounts[d.key]) || 0,
+     ]),
+   ),
+ );
+ const hasCountEntry = computed(() =>
+-  FLOAT_DENOMINATIONS.some(
++  PETTY_CASH_DENOMINATIONS.some(
+     (d) => (d.value >= 1 || showRareCoins.value) && denomCounts[d.key] !== '',
+   ),
+ );
+diff --git a/apps/petty-cash-ui/pages/requests/[id]/index.vue b/apps/petty-cash-ui/pages/requests/[id]/index.vue
+index 6f64d28..ec3eb69 100644
+--- a/apps/petty-cash-ui/pages/requests/[id]/index.vue
++++ b/apps/petty-cash-ui/pages/requests/[id]/index.vue
+@@ -609,19 +609,19 @@
+ </template>
+ 
+ <script setup lang="ts">
+-import PageSkeleton from '~/components/float/PageSkeleton.vue';
+-import { cashDifference, cashSum, denominationTotal, emptyDenominationCounts  } from '~/utils/floatStatus';
+-import { formatDate, formatMoney } from '~/utils/floatFormat';
++import PageSkeleton from '~/components/petty-cash/PageSkeleton.vue';
++import { cashDifference, cashSum, denominationTotal, emptyDenominationCounts  } from '~/utils/pettyCashStatus';
++import { formatDate, formatMoney } from '~/utils/pettyCashFormat';
+ 
+ import { computed, ref } from 'vue';
+ import { useRoute } from 'vue-router';
+ import BackButton from '~/components/backButton.vue';
+-import BanknoteCounter from '~/components/float/BanknoteCounter.vue';
+-import NotifyCollectionModal from '~/components/float/NotifyCollectionModal.vue';
+-import PettyCashRequestModal from '~/components/float/PettyCashRequestModal.vue';
+-import BulkReceiptsModal from '~/components/float/BulkReceiptsModal.vue';
+-import ReceiptScanModal from '~/components/float/ReceiptScanModal.vue';
+-import ReceiptAttachmentPreview from '~/components/float/ReceiptAttachmentPreview.vue';
++import BanknoteCounter from '~/components/petty-cash/BanknoteCounter.vue';
++import NotifyCollectionModal from '~/components/petty-cash/NotifyCollectionModal.vue';
++import PettyCashRequestModal from '~/components/petty-cash/PettyCashRequestModal.vue';
++import BulkReceiptsModal from '~/components/petty-cash/BulkReceiptsModal.vue';
++import ReceiptScanModal from '~/components/petty-cash/ReceiptScanModal.vue';
++import ReceiptAttachmentPreview from '~/components/petty-cash/ReceiptAttachmentPreview.vue';
+ import {
+   ArchiveBoxIcon,
+   ArrowDownTrayIcon,
+@@ -659,16 +659,16 @@ import {
+   PoTypography,
+   useToastify,
+ } from '@pension/ui-kit';
+-import { useFloatStore } from '~/stores/useFloatStore';
+-import type { ExpenseItem } from '~/types/float';
+-import { downloadRequestPdf } from '~/utils/floatPdf';
++import { usePettyCashStore } from '~/stores/usePettyCashStore';
++import type { ExpenseItem } from '~/types/pettyCash';
++import { downloadRequestPdf } from '~/utils/pettyCashPdf';
+ 
+ definePageMeta({
+   layout: 'main',
+ });
+ 
+ const route = useRoute();
+-const store = useFloatStore();
++const store = usePettyCashStore();
+ const { showToast } = useToastify();
+ 
+ const requestId = computed(() => route.params.id as string);
+diff --git a/apps/petty-cash-ui/pages/requests/index.vue b/apps/petty-cash-ui/pages/requests/index.vue
+index 765206c..7f0dbad 100644
+--- a/apps/petty-cash-ui/pages/requests/index.vue
++++ b/apps/petty-cash-ui/pages/requests/index.vue
+@@ -52,7 +52,7 @@
+                 .filter(Boolean)
+                 .join(' · ')
+             "
+-            :amount="formatMoney(floatAmount(item))"
++            :amount="formatMoney(pettyCashAmount(item))"
+           >
+             <template #actions>
+               <PoButton
+@@ -91,8 +91,8 @@
+ </template>
+ 
+ <script setup lang="ts">
+-import PageSkeleton from '~/components/float/PageSkeleton.vue';
+-import { formatDate, formatMoney } from '~/utils/floatFormat';
++import PageSkeleton from '~/components/petty-cash/PageSkeleton.vue';
++import { formatDate, formatMoney } from '~/utils/pettyCashFormat';
+ 
+ import { computed, ref, watch } from 'vue';
+ import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
+@@ -106,12 +106,12 @@ import {
+   PoSearch,
+   useToastify,
+ } from '@pension/ui-kit';
+-import ListRow, { type ListCell } from '~/components/float/ListRow.vue';
+-import ListTable, { type ListColumn } from '~/components/float/ListTable.vue';
+-import { useFloatStore } from '~/stores/useFloatStore';
+-import type { PettyCashSummary as PettyCashRequest } from '~/types/float';
+-import { downloadRequestPdf } from '~/utils/floatPdf';
+-import { floatAmount } from '~/utils/floatStatus';
++import ListRow, { type ListCell } from '~/components/petty-cash/ListRow.vue';
++import ListTable, { type ListColumn } from '~/components/petty-cash/ListTable.vue';
++import { usePettyCashStore } from '~/stores/usePettyCashStore';
++import type { PettyCashSummary as PettyCashRequest } from '~/types/pettyCash';
++import { downloadRequestPdf } from '~/utils/pettyCashPdf';
++import { pettyCashAmount } from '~/utils/pettyCashStatus';
+ 
+ definePageMeta({
+   layout: 'main',
+@@ -121,7 +121,7 @@ useHead({
+   title: 'Petty Cash — History',
+ });
+ 
+-const store = useFloatStore();
++const store = usePettyCashStore();
+ const { showToast } = useToastify();
+ 
+ const searchQuery = ref(String(store.requestQuery.q || ''));
+@@ -181,7 +181,7 @@ function cells(item: PettyCashRequest): ListCell[] {
+     { text: item.id, to: `/requests/${item.id}` },
+     { text: item.purpose, wrap: true },
+     {
+-      text: formatMoney(floatAmount(item)),
++      text: formatMoney(pettyCashAmount(item)),
+       align: 'right',
+       class: 'tabular-nums font-semibold text-slate-900',
+     },
+diff --git a/apps/petty-cash-ui/pages/settings.vue b/apps/petty-cash-ui/pages/settings.vue
+index 06b9221..dd33d82 100644
+--- a/apps/petty-cash-ui/pages/settings.vue
++++ b/apps/petty-cash-ui/pages/settings.vue
+@@ -30,12 +30,12 @@
+ </template>
+ 
+ <script setup lang="ts">
+-import PageSkeleton from '~/components/float/PageSkeleton.vue';
++import PageSkeleton from '~/components/petty-cash/PageSkeleton.vue';
+ import { PoContentArea, PoPageTitle } from '@pension/ui-kit';
+-import { useFloatStore } from '~/stores/useFloatStore';
+-import StaffAssignmentSection from '~/components/float/StaffAssignmentSection.vue';
++import { usePettyCashStore } from '~/stores/usePettyCashStore';
++import StaffAssignmentSection from '~/components/petty-cash/StaffAssignmentSection.vue';
+ 
+-const store = useFloatStore();
++const store = usePettyCashStore();
+ 
+ definePageMeta({
+   layout: 'main',
+diff --git a/apps/petty-cash-ui/public/images/appicons/float.svg b/apps/petty-cash-ui/public/images/appicons/petty-cash.svg
+similarity index 100%
+rename from apps/petty-cash-ui/public/images/appicons/float.svg
+rename to apps/petty-cash-ui/public/images/appicons/petty-cash.svg
+diff --git a/apps/petty-cash-ui/stores/useFloatStore.ts b/apps/petty-cash-ui/stores/usePettyCashStore.ts
+similarity index 99%
+rename from apps/petty-cash-ui/stores/useFloatStore.ts
+rename to apps/petty-cash-ui/stores/usePettyCashStore.ts
+index 457576c..d58db76 100644
+--- a/apps/petty-cash-ui/stores/useFloatStore.ts
++++ b/apps/petty-cash-ui/stores/usePettyCashStore.ts
+@@ -16,8 +16,8 @@ import type {
+   FundTransaction,
+   DailyReconciliation,
+   ExpenseItem,
+-  FloatNotification,
+-} from '~/types/float';
++  PettyCashNotification,
++} from '~/types/pettyCash';
+ type Me = {
+   id: string;
+   name: string;
+@@ -28,7 +28,7 @@ type Me = {
+ };
+ type Page<T> = { data: T[]; total: number; page: number; pageSize: number };
+ type ListQuery = Record<string, string | number | boolean | undefined>;
+-export const useFloatStore = defineStore('float', () => {
++export const usePettyCashStore = defineStore('pettyCash', () => {
+   const currentUser = ref<Me>({
+     id: '',
+     name: '',
+@@ -84,7 +84,7 @@ export const useFloatStore = defineStore('float', () => {
+     error = ref(''),
+     accessError = ref(''),
+     pageDenied = ref(false),
+-    notifications = ref<FloatNotification[]>([]),
++    notifications = ref<PettyCashNotification[]>([]),
+     notificationTotal = ref(0);
+   let view = '',
+     generation = 0,
+@@ -369,7 +369,7 @@ export const useFloatStore = defineStore('float', () => {
+     });
+   }
+   async function fetchNotifications(page = notificationPage.value, ttl = 0) {
+-    await loadList<FloatNotification>(
++    await loadList<PettyCashNotification>(
+       'notifications',
+       '/notifications',
+       { page, pageSize: 20 },
+diff --git a/apps/petty-cash-ui/test/mutations.test.mjs b/apps/petty-cash-ui/test/mutations.test.mjs
+index 8df9d69..9404f24 100644
+--- a/apps/petty-cash-ui/test/mutations.test.mjs
++++ b/apps/petty-cash-ui/test/mutations.test.mjs
+@@ -11,7 +11,7 @@ runInNewContext(ts.transpileModule(readFileSync(new URL('../utils/staffEligibili
+ }).outputText, { exports: eligibilityModule, Set });
+ 
+ 
+-const source = readFileSync(new URL('../stores/useFloatStore.ts', import.meta.url), 'utf8');
++const source = readFileSync(new URL('../stores/usePettyCashStore.ts', import.meta.url), 'utf8');
+ const code = ts.transpileModule(source, {
+   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+ }).outputText;
+@@ -40,7 +40,7 @@ function setup(handler) {
+       return handler(path, options);
+     },
+   });
+-  return { store: exports.useFloatStore(pinia.createPinia()), calls };
++  return { store: exports.usePettyCashStore(pinia.createPinia()), calls };
+ }
+ const ok = (data = {}) => ({ success: true, data });
+ const failure = (status) => ({ success: false, status, error: { message: 'Temporary failure' } });
+diff --git a/apps/petty-cash-ui/test/navigation.test.mjs b/apps/petty-cash-ui/test/navigation.test.mjs
+index b8cb41c..06fea05 100644
+--- a/apps/petty-cash-ui/test/navigation.test.mjs
++++ b/apps/petty-cash-ui/test/navigation.test.mjs
+@@ -11,7 +11,7 @@ runInNewContext(ts.transpileModule(readFileSync(new URL('../utils/staffEligibili
+ }).outputText, { exports: eligibilityModule, Set });
+ 
+ 
+-const code = ts.transpileModule(readFileSync(new URL('../stores/useFloatStore.ts', import.meta.url), 'utf8'), {
++const code = ts.transpileModule(readFileSync(new URL('../stores/usePettyCashStore.ts', import.meta.url), 'utf8'), {
+   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+ }).outputText;
+ const allCapabilities = Object.fromEntries(['viewRequests', 'viewRequest', 'viewApprovals', 'viewFinance', 'viewHistory',
+@@ -42,7 +42,7 @@ function setup({ capabilities = allCapabilities, handler } = {}) {
+       return ok(page);
+     },
+   });
+-  return { store: exports.useFloatStore(pinia.createPinia()), calls, advance: ms => { now += ms; }, user };
++  return { store: exports.usePettyCashStore(pinia.createPinia()), calls, advance: ms => { now += ms; }, user };
+ }
+ 
+ test('overlapping initial loads share access, notifications, stats and list requests', async () => {
+diff --git a/apps/petty-cash-ui/test/receipt-extraction.test.mjs b/apps/petty-cash-ui/test/receipt-extraction.test.mjs
+index 04cfb7e..f37f444 100644
+--- a/apps/petty-cash-ui/test/receipt-extraction.test.mjs
++++ b/apps/petty-cash-ui/test/receipt-extraction.test.mjs
+@@ -10,7 +10,7 @@ const transpile = (source) => ts.transpileModule(source, {
+ }).outputText;
+ const helper = {};
+ runInNewContext(transpile(readFileSync(new URL('../utils/receiptExtraction.ts', import.meta.url), 'utf8')), { exports: helper });
+-const { descriptor } = parse(readFileSync(new URL('../components/float/ReceiptScanModal.vue', import.meta.url), 'utf8'));
++const { descriptor } = parse(readFileSync(new URL('../components/petty-cash/ReceiptScanModal.vue', import.meta.url), 'utf8'));
+ const compiled = transpile(compileScript(descriptor, { id: 'receipt-test' }).content);
+ const result = { documentType: 'invoice', supplierName: 'AI Shop', amount: 50.5, expenseDate: '2026-01-01', invoiceNumber: 'INV-1', description: 'Paper, Pens' };
+ function setup(extractReceipt) {
+@@ -22,7 +22,7 @@ function setup(extractReceipt) {
+     require: (name) => {
+       if (name === 'vue') return vue;
+       if (name === '~/utils/receiptExtraction') return helper;
+-      if (name === '~/stores/useFloatStore') return { useFloatStore: () => store };
++      if (name === '~/stores/usePettyCashStore') return { usePettyCashStore: () => store };
+       if (name === '@pension/ui-kit') return { useToastify: () => ({ showToast() {} }) };
+       if (name.startsWith('@heroicons/')) return {};
+       throw new Error(name);
+diff --git a/apps/petty-cash-ui/types/float.ts b/apps/petty-cash-ui/types/pettyCash.ts
+similarity index 99%
+rename from apps/petty-cash-ui/types/float.ts
+rename to apps/petty-cash-ui/types/pettyCash.ts
+index 5ab1828..1601a81 100644
+--- a/apps/petty-cash-ui/types/float.ts
++++ b/apps/petty-cash-ui/types/pettyCash.ts
+@@ -227,7 +227,7 @@ export interface RequestFinancialReconciliation {
+   isFullyReconciled: boolean;
+ }
+ 
+-export interface FloatNotification {
++export interface PettyCashNotification {
+   id: string;
+   title: string;
+   text: string;
+diff --git a/apps/petty-cash-ui/utils/floatFormat.ts b/apps/petty-cash-ui/utils/pettyCashFormat.ts
+similarity index 100%
+rename from apps/petty-cash-ui/utils/floatFormat.ts
+rename to apps/petty-cash-ui/utils/pettyCashFormat.ts
+diff --git a/apps/petty-cash-ui/utils/floatPdf.ts b/apps/petty-cash-ui/utils/pettyCashPdf.ts
+similarity index 97%
+rename from apps/petty-cash-ui/utils/floatPdf.ts
+rename to apps/petty-cash-ui/utils/pettyCashPdf.ts
+index 28264e2..e488ec5 100644
+--- a/apps/petty-cash-ui/utils/floatPdf.ts
++++ b/apps/petty-cash-ui/utils/pettyCashPdf.ts
+@@ -1,11 +1,11 @@
+-import { formatDate, formatMoney } from '~/utils/floatFormat';
++import { formatDate, formatMoney } from '~/utils/pettyCashFormat';
+ import type {
+   DailyReconciliation,
+   FundTransaction,
+   PettyCashFund,
+   PettyCashRequest,
+-} from '~/types/float';
+-import { FLOAT_DENOMINATIONS, floatAmount, cashDifference, cashSum } from '~/utils/floatStatus';
++} from '~/types/pettyCash';
++import { PETTY_CASH_DENOMINATIONS, pettyCashAmount, cashDifference, cashSum } from '~/utils/pettyCashStatus';
+ 
+ // PDFs are rendered from an HTML string with inline styles (html2canvas ignores app CSS classes
+ // it can't resolve off-screen). Request receipts are appended before the single download.
+@@ -109,7 +109,7 @@ export async function downloadRequestPdf(
+ ) {
+   const spent = req.expenseTotal ?? cashSum(req.expenses.map((e) => e.amount));
+   const returned = cashSum(req.returns.map((r) => r.actualAmount));
+-  const received = req.totalCashIssued || floatAmount(req);
++  const received = req.totalCashIssued || pettyCashAmount(req);
+   const overspend = Math.max(0, cashDifference(spent, received));
+ 
+   const details: [string, string][] = [
+@@ -192,7 +192,7 @@ const statusLabel = (s: DailyReconciliation['status']) =>
+   s === 'balanced' ? 'Balanced' : s === 'resolved' ? 'Resolved' : 'Discrepancy';
+ 
+ function denominationTable(count: DailyReconciliation) {
+-  const rows = FLOAT_DENOMINATIONS.map((d) => {
++  const rows = PETTY_CASH_DENOMINATIONS.map((d) => {
+     const n = Number((count.denominations as unknown as Record<string, number>)[d.key]) || 0;
+     return n
+       ? `<tr><td style="${STYLE.td}">${esc(d.label)}</td><td style="${STYLE.tdR}">${n}</td><td style="${STYLE.tdR}">${esc(formatMoney(n * d.value))}</td></tr>`
+diff --git a/apps/petty-cash-ui/utils/floatStatus.ts b/apps/petty-cash-ui/utils/pettyCashStatus.ts
+similarity index 72%
+rename from apps/petty-cash-ui/utils/floatStatus.ts
+rename to apps/petty-cash-ui/utils/pettyCashStatus.ts
+index 28edc5f..a9141ef 100644
+--- a/apps/petty-cash-ui/utils/floatStatus.ts
++++ b/apps/petty-cash-ui/utils/pettyCashStatus.ts
+@@ -1,5 +1,5 @@
+-import FLOAT_DENOMINATIONS from '@petty-cash/denominations';
+-import type { RequestStatus } from '~/types/float';
++import PETTY_CASH_DENOMINATIONS from '@petty-cash/denominations';
++import type { RequestStatus } from '~/types/pettyCash';
+ 
+ const STATUS_CONFIG: Record<RequestStatus, { label: string; color: string }> = {
+   draft: { label: 'Draft', color: 'gray' },
+@@ -17,23 +17,23 @@ const STATUS_CONFIG: Record<RequestStatus, { label: string; color: string }> = {
+ /** Largest petty cash amount (MVR) per request; the API enforces the same limit. */
+ export const MAX_REQUEST_AMOUNT = 5000;
+ 
+-export function floatStatus(status: RequestStatus) {
++export function pettyCashStatus(status: RequestStatus) {
+   return STATUS_CONFIG[status] || { label: status, color: 'gray' };
+ }
+ 
+-export function floatAmount(req: { approvedAmount: number; requestedAmount: number }) {
++export function pettyCashAmount(req: { approvedAmount: number; requestedAmount: number }) {
+   return req.approvedAmount || req.requestedAmount;
+ }
+ 
+-export { default as FLOAT_DENOMINATIONS } from '@petty-cash/denominations';
++export { default as PETTY_CASH_DENOMINATIONS } from '@petty-cash/denominations';
+ 
+ export function emptyDenominationCounts(): Record<string, number | ''> {
+-  return Object.fromEntries(FLOAT_DENOMINATIONS.map((d) => [d.key, '']));
++  return Object.fromEntries(PETTY_CASH_DENOMINATIONS.map((d) => [d.key, '']));
+ }
+ 
+ export function denominationTotal(counts: Record<string, number | string>): number {
+   return (
+-    FLOAT_DENOMINATIONS.reduce((sum, d) => sum + (Number(counts[d.key]) || 0) * d.minorUnits, 0) /
++    PETTY_CASH_DENOMINATIONS.reduce((sum, d) => sum + (Number(counts[d.key]) || 0) * d.minorUnits, 0) /
+     100
+   );
+ }
+diff --git a/apps/petty-cash-ui/utils/receiptPdf.ts b/apps/petty-cash-ui/utils/receiptPdf.ts
+index 74c7533..cc14592 100644
+--- a/apps/petty-cash-ui/utils/receiptPdf.ts
++++ b/apps/petty-cash-ui/utils/receiptPdf.ts
+@@ -1,5 +1,5 @@
+ import { PDFDocument, PageSizes, rgb } from 'pdf-lib';
+-import type { ExpenseItem } from '~/types/float';
++import type { ExpenseItem } from '~/types/pettyCash';
+ 
+ async function imagePng(blob: Blob): Promise<ArrayBuffer> {
+   const url = URL.createObjectURL(blob);
+diff --git a/docs/IMPLEMENTATION.md b/docs/IMPLEMENTATION.md
+index 20a038a..076b95d 100644
+--- a/docs/IMPLEMENTATION.md
++++ b/docs/IMPLEMENTATION.md
+@@ -22,7 +22,7 @@ Implemented 19 October 2026. The user-approved MPAO-only GS–Finance workflow s
+ 
+ Initial implementation checks passed: **54 tests across three suites**, both application builds, Nuxt type checking, both ESLint checks, Prisma schema validation, `yarn install --frozen-lockfile`, and `git diff --check`. Terraform files were formatted; provider validation and deployment were not performed.
+ 
+-Automated suites live in `apps/petty-cash-api/src/test/*.spec.ts`. The financial suite uses real MySQL 8.4 in a dedicated `float_test` database; no original application database was reset. Coverage includes:
++Automated suites live in `apps/petty-cash-api/src/test/*.spec.ts`. The financial suite uses real MySQL 8.4 in a dedicated `petty_cash_test` database; no original application database was reset. Coverage includes:
+ 
+ - Happy path, overspend, exact spend, cash discrepancies, ownership, roles, self-actions, stale writes, corrections and reminder limits.
+ - Concurrent finalization, idempotent replay/conflicting replay, insufficient-fund rollback, immutable ledger SQL triggers, subsequent ledger movements and stale count resolution.
+@@ -126,4 +126,4 @@ Deployment step: run the updated SQL against the intended Bifrost database after
+ Imported the ui-lab Settings layout with email lookup/confirmation modals, real `staff_assignments` persistence, soft removal/re-addition history and transactional last-person/duplicate protections. Added the shared employee lookup RPC in proto/common-grpc and a lazy authenticated gRPC client in Petty Cash. Settings has four dedicated permissions (34 catalog entries total), deliberately outside the Request/Finance role templates. `/access` provides only the caller's assignment eligibility; frontend actions combine it with existing permissions/state/ownership. Backend business authorization is unchanged. See STAFF_SETTINGS.md for initial setup and the coordinated cross-repository rollout; the schema and permission scripts must be deployed before enabling the feature for real users.
+ 
+ 
+-Staff Settings verification: shared proto generation passed and the two changed common-grpc source files passed lint. Petty Cash API checks passed (135 existing tests plus 9 new assignment/gRPC tests); 14 MySQL workflow tests were skipped because FLOAT_TEST_DATABASE_URL was not supplied. All 37 frontend tests, API TypeScript checking and UI typechecking passed. Repository lint passed with one pre-existing main-layout image self-closing warning. The Settings components were visually inspected on desktop and at 390px using synthetic data in an isolated preview; real directory lookup and database migration were not exercised against deployment services. The real Petty Cash gRPC client was exercised against a local stub using the generated wire contract. Database migrations, Bifrost provisioning and package/service deployment have not been performed.
++Staff Settings verification: shared proto generation passed and the two changed common-grpc source files passed lint. Petty Cash API checks passed (135 existing tests plus 9 new assignment/gRPC tests); 14 MySQL workflow tests were skipped because PETTY_CASH_TEST_DATABASE_URL was not supplied. All 37 frontend tests, API TypeScript checking and UI typechecking passed. Repository lint passed with one pre-existing main-layout image self-closing warning. The Settings components were visually inspected on desktop and at 390px using synthetic data in an isolated preview; real directory lookup and database migration were not exercised against deployment services. The real Petty Cash gRPC client was exercised against a local stub using the generated wire contract. Database migrations, Bifrost provisioning and package/service deployment have not been performed.
+diff --git a/docs/FLOAT_BACKEND_PRD.md b/docs/PETTY_CASH_BACKEND_PRD.md
+similarity index 79%
+rename from docs/FLOAT_BACKEND_PRD.md
+rename to docs/PETTY_CASH_BACKEND_PRD.md
+index 5ee940d..2af09a3 100644
+--- a/docs/FLOAT_BACKEND_PRD.md
++++ b/docs/PETTY_CASH_BACKEND_PRD.md
+@@ -2,9 +2,9 @@
+ 
+ **Audience:** backend developers and their AI coding agent
+ **Stack:** NestJS (REST, JSON), relational database (PostgreSQL recommended), your existing auth
+-**Frontend:** Nuxt 3 app at `pages/float/*` (this repo). The UI is complete and currently runs on an in-memory mock store (`stores/useFloatStore.ts`). This document describes what the backend must provide so that mock can be replaced with real API calls.
++**Frontend:** Nuxt 3 app at `pages/*` (this repo). The UI is complete and currently runs on an in-memory mock store (`stores/usePettyCashStore.ts`). This document describes what the backend must provide so that mock can be replaced with real API calls.
+ **Status:** Ready for build
+-**Related:** `FLOAT_PRD.md` in this folder is the original stakeholder PRD. Where the two disagree, **this document wins**: it describes the flows as they were built and agreed in the UI.
++**Related:** `PETTY_CASH_PRD.md` in this folder is the original stakeholder PRD. Where the two disagree, **this document wins**: it describes the flows as they were built and agreed in the UI.
+ 
+ ---
+ 
+@@ -15,7 +15,7 @@
+ 3. Section 6 is the **ledger**. Every movement of physical cash must write exactly one ledger row, in the same database transaction as the status change.
+ 4. Section 7 walks through each screen and the action behind each button. Section 8 is the endpoint list. Section 9 is the data model.
+ 5. Build in the order given in section 13. Each phase ends with the acceptance tests in section 12 for that phase.
+-6. Keep field names identical to the frontend types in `types/float.ts` (camelCase). Section 10 lists the few additions.
++6. Keep field names identical to the frontend types in `types/pettyCash.ts` (camelCase). Section 10 lists the few additions.
+ 
+ **Invariants you must not break**
+ 
+@@ -127,18 +127,18 @@ Any time: Finance records a top-up → + top-up
+ 
+ | # | From | Action | To | Who | Endpoint | Side effects |
+ |---|---|---|---|---|---|---|
+-| T1 | — | Create | `pending_approval` | GS Requester | `POST /float/requests` | Voucher number, timeline `created` |
+-| T2 | `pending_approval` | Edit | `pending_approval` | Requester (owner) | `PATCH /float/requests/:id` | Timeline lists what changed |
+-| T3 | `pending_approval` | Authorize | `pending_finance` | GS Manager | `POST /float/requests/:id/authorize` | Timeline `approved`, notify Finance |
+-| T4 | `pending_approval` | Reject | `rejected` | GS Manager | `POST /float/requests/:id/reject` | `rejectionReason`, timeline, notify requester |
+-| T5 | `pending_finance` | Notify for collection | `ready_for_collection` | Finance | `POST /float/requests/:id/notify-collection` | Sets `approvedAmount`; timeline; notify requester. **No ledger entry.** |
+-| T6 | `ready_for_collection` | Confirm receipt | `cash_issued` | Requester (owner) | `POST /float/requests/:id/confirm-receipt` | Create issuance (acknowledged), `totalCashIssued += approvedAmount`, **ledger `cash_issued` (−)** |
+-| T7 | `cash_issued`, `returned_for_correction` | Add receipt | same | Requester (owner) | `POST /float/requests/:id/expenses` | Timeline `expense_added` |
+-| T8 | `cash_issued`, `returned_for_correction` | Remove receipt | same | Requester (owner) | `DELETE /float/requests/:id/expenses/:expenseId` | Timeline |
+-| T9 | `cash_issued`, `returned_for_correction` | Settle | `pending_closure` | Requester (owner) | `POST /float/requests/:id/settle` | Clears `correctionNote`; timeline; notify Finance |
+-| T10 | `cash_issued`, `returned_for_correction` | Send reminder | same | Finance | `POST /float/requests/:id/reminders` | Timeline `reminder`; notify requester |
+-| T11 | `pending_closure` | Return for correction | `returned_for_correction` | Finance | `POST /float/requests/:id/return-for-correction` | `correctionNote`; timeline `expense_returned`; notify requester |
+-| T12 | `pending_closure` | Finalize & close | `closed` | Finance | `POST /float/requests/:id/finalize` | Cash return (+) **or** reimbursement (−) ledger row; optional `dynamicsReference`; `closedBy`, `closedAt`; timeline; notify requester |
++| T1 | — | Create | `pending_approval` | GS Requester | `POST /requests` | Voucher number, timeline `created` |
++| T2 | `pending_approval` | Edit | `pending_approval` | Requester (owner) | `PATCH /requests/:id` | Timeline lists what changed |
++| T3 | `pending_approval` | Authorize | `pending_finance` | GS Manager | `POST /requests/:id/authorize` | Timeline `approved`, notify Finance |
++| T4 | `pending_approval` | Reject | `rejected` | GS Manager | `POST /requests/:id/reject` | `rejectionReason`, timeline, notify requester |
++| T5 | `pending_finance` | Notify for collection | `ready_for_collection` | Finance | `POST /requests/:id/notify-collection` | Sets `approvedAmount`; timeline; notify requester. **No ledger entry.** |
++| T6 | `ready_for_collection` | Confirm receipt | `cash_issued` | Requester (owner) | `POST /requests/:id/confirm-receipt` | Create issuance (acknowledged), `totalCashIssued += approvedAmount`, **ledger `cash_issued` (−)** |
++| T7 | `cash_issued`, `returned_for_correction` | Add receipt | same | Requester (owner) | `POST /requests/:id/expenses` | Timeline `expense_added` |
++| T8 | `cash_issued`, `returned_for_correction` | Remove receipt | same | Requester (owner) | `DELETE /requests/:id/expenses/:expenseId` | Timeline |
++| T9 | `cash_issued`, `returned_for_correction` | Settle | `pending_closure` | Requester (owner) | `POST /requests/:id/settle` | Clears `correctionNote`; timeline; notify Finance |
++| T10 | `cash_issued`, `returned_for_correction` | Send reminder | same | Finance | `POST /requests/:id/reminders` | Timeline `reminder`; notify requester |
++| T11 | `pending_closure` | Return for correction | `returned_for_correction` | Finance | `POST /requests/:id/return-for-correction` | `correctionNote`; timeline `expense_returned`; notify requester |
++| T12 | `pending_closure` | Finalize & close | `closed` | Finance | `POST /requests/:id/finalize` | Cash return (+) **or** reimbursement (−) ledger row; optional `dynamicsReference`; `closedBy`, `closedAt`; timeline; notify requester |
+ 
+ Any other (status, action) pair must return **409 Conflict** with a message such as `"Request PC-2026-0042 is Disbursed; it can't be authorized."`
+ 
+@@ -209,9 +209,9 @@ At **Finalize** (T12):
+ 
+ ## 7. Screens and actions
+ 
+-Navigation (left menu): **Requests**, **GS Approvals**, **Finance Desk**, **History**, **Reconciliation**, **Ledger**. Plus the **Request page** (`/float/requests/:id`). On phones lists become cards and stat cards are hidden; on wide screens (≥1280px) lists look like tables. None of this changes the API.
++Navigation (left menu): **Requests**, **GS Approvals**, **Finance Desk**, **History**, **Reconciliation**, **Ledger**. Plus the **Request page** (`/requests/:id`). On phones lists become cards and stat cards are hidden; on wide screens (≥1280px) lists look like tables. None of this changes the API.
+ 
+-### 7.1 Requests (`/float`) — `pages/float/index.vue`
++### 7.1 Requests (`/`) — `pages/index.vue`
+ 
+ Shows: the four stat cards; **My Active Petty Cash** = the current user's requests that are not `closed`, `rejected` or `cancelled`, newest first.
+ 
+@@ -219,12 +219,12 @@ Columns: Date (`createdAt`), Voucher no, Particulars, Petty cash (`approvedAmoun
+ 
+ | Button | Shown when | Does | Endpoint |
+ |---|---|---|---|
+-| **Petty cash request** | always | Opens form: Particulars/description (required), Requested petty cash MVR (required, > 0), Needed by (required date, today or later; defaults to today) | `POST /float/requests` |
+-| **Edit** | `pending_approval` | Same form, prefilled. Save is disabled until something changes | `PATCH /float/requests/:id` |
+-| **Confirm receipt** | `ready_for_collection` | Requester confirms they received the cash | `POST /float/requests/:id/confirm-receipt` |
++| **Petty cash request** | always | Opens form: Particulars/description (required), Requested petty cash MVR (required, > 0), Needed by (required date, today or later; defaults to today) | `POST /requests` |
++| **Edit** | `pending_approval` | Same form, prefilled. Save is disabled until something changes | `PATCH /requests/:id` |
++| **Confirm receipt** | `ready_for_collection` | Requester confirms they received the cash | `POST /requests/:id/confirm-receipt` |
+ | **Add receipts** / **Correct receipts** | `cash_issued` / `returned_for_correction` | Opens the request page | — |
+ 
+-### 7.2 GS Approvals (`/float/approvals`) — `pages/float/approvals.vue`
++### 7.2 GS Approvals (`/approvals`) — `pages/approvals.vue`
+ 
+ Shows: stat cards; all `pending_approval` requests. Columns: Voucher no, Requester, Particulars (+ created date), Petty cash, Decision.
+ 
+@@ -233,7 +233,7 @@ Shows: stat cards; all `pending_approval` requests. Columns: Voucher no, Request
+ | **Authorize** | Approves straight away | `POST …/authorize` |
+ | **Reject** | Opens a dialog with an optional reason (server default: `"Rejected by GS."`) | `POST …/reject` |
+ 
+-### 7.3 Finance Desk (`/float/finance`) — `pages/float/finance.vue`
++### 7.3 Finance Desk (`/finance`) — `pages/finance.vue`
+ 
+ Shows: stat cards; four tabs. Columns: Voucher no, Requester, Particulars, Petty cash (`totalCashIssued || approvedAmount || requestedAmount`), Status, Action.
+ 
+@@ -244,7 +244,7 @@ Shows: stat cards; four tabs. Columns: Voucher no, Requester, Particulars, Petty
+ | **Disbursed** | `cash_issued`, `returned_for_correction` | **Send reminder** |
+ | **Settled** | `pending_closure` | **Finalize** (opens the request page) |
+ 
+-**Notify for collection** dialog (`components/float/NotifyCollectionModal.vue`):
++**Notify for collection** dialog (`components/petty-cash/NotifyCollectionModal.vue`):
+ 
+ - Shows voucher no, requester, particulars, requested amount.
+ - *Amount being given (MVR)*: required, > 0, prefilled with the requested amount.
+@@ -252,7 +252,7 @@ Shows: stat cards; four tabs. Columns: Voucher no, Requester, Particulars, Petty
+ - Endpoint: `POST …/notify-collection` with `{ amount, reason? }`. Sets `approvedAmount = amount`. The timeline must record the requested amount and the reason when they differ.
+ - Dynamics reference is **not** entered here (moved to Finalize).
+ 
+-### 7.4 History (`/float/requests`) — `pages/float/requests/index.vue`
++### 7.4 History (`/requests`) — `pages/requests/index.vue`
+ 
+ Shows **closed requests only**, newest `closedAt` first, 10 per page, with search across voucher no, particulars, requester name and Dynamics ref.
+ 
+@@ -260,9 +260,9 @@ Columns: Closed (`closedAt`), Voucher no, Particulars, Petty cash, Dynamics ref,
+ 
+ | Button | Does | Endpoint |
+ |---|---|---|
+-| **PDF** | Downloads the voucher PDF | Data: `GET /float/requests/:id` (PDF is generated in the browser today; see 8.8) |
++| **PDF** | Downloads the voucher PDF | Data: `GET /requests/:id` (PDF is generated in the browser today; see 8.8) |
+ 
+-### 7.5 Request page (`/float/requests/:id`) — `pages/float/requests/[id]/index.vue`
++### 7.5 Request page (`/requests/:id`) — `pages/requests/[id]/index.vue`
+ 
+ Shows: status, amount (labelled *Requested amount* before approval, *Approved amount* after), details (voucher no, particulars, requester, submitted date, needed by, Dynamics voucher when set, notes), receipts with totals (Received / Spent / Balance to return or Owed to requester), Settlement Audit card (when `pending_closure`), activity timeline.
+ 
+@@ -277,7 +277,7 @@ Header buttons by status:
+ | `pending_closure` | Side card: **Finalize & close**, **Return for correction** (Finance) |
+ | `closed` | **Download PDF** |
+ 
+-**Add receipt** (`components/float/ReceiptScanModal.vue`). Three ways in:
++**Add receipt** (`components/petty-cash/ReceiptScanModal.vue`). Three ways in:
+ 
+ 1. **Take photo** (phone camera) or 2. **Attach file** (image or PDF): the file is uploaded and read by OCR, which pre-fills the form for the user to check.
+ 3. **Enter details without a file**: manual entry; the receipt is flagged *No attachment*.
+@@ -286,13 +286,13 @@ Fields: Vendor (required), Date (required), Total MVR (required, > 0), Invoice n
+ 
+ Categories: `Office Supplies`, `Hospitality & Food`, `Hardware & Tools`, `Transport & Delivery`, `Maintenance & Repairs`, `Printing & Stationery`.
+ 
+-Endpoints: `POST /float/files` (upload) → `POST /float/ocr/receipts` (optional, returns suggestions) → `POST …/expenses`. Remove: `DELETE …/expenses/:expenseId`.
++Endpoints: `POST /files` (upload) → `POST /ocr/receipts` (optional, returns suggestions) → `POST …/expenses`. Remove: `DELETE …/expenses/:expenseId`.
+ 
+ **Settle** dialog: shows Received / Spent / To return (or *Owed to you*). Settling with zero receipts is allowed (the UI warns the full amount must be returned). Endpoint: `POST …/settle`.
+ 
+ **Return for correction** dialog: *What needs fixing?* (required). Endpoint: `POST …/return-for-correction` with `{ note }`. The note is shown to the requester as a banner (`correctionNote`).
+ 
+-**Finalize & close** dialog (`components/float/BanknoteCounter.vue`):
++**Finalize & close** dialog (`components/petty-cash/BanknoteCounter.vue`):
+ 
+ - Shows cash received and receipts count/total.
+ - Overspend → message "Reimburse the requester", button **Pay {overspend} & close**.
+@@ -301,7 +301,7 @@ Endpoints: `POST /float/files` (upload) → `POST /float/ocr/receipts` (optional
+ - *Dynamics reference (optional)*, prefilled if the request already has one.
+ - Endpoint: `POST …/finalize` with `{ denominations?, dynamicsReference? }`. The **server** recomputes everything (expected, counted, overspend) from its own data and the denominations; it must not trust totals sent by the client.
+ 
+-### 7.6 Reconciliation (`/float/reconciliation`) — `pages/float/reconciliation.vue`
++### 7.6 Reconciliation (`/reconciliation`) — `pages/reconciliation.vue`
+ 
+ Shows: Expected vault cash, Last count (days ago; flagged "due" after 7 days), Fund status (Balanced / Discrepancy pending); count history.
+ 
+@@ -309,11 +309,11 @@ Columns: Date, Counted by (+ notes), Ledger, Counted, Difference, Status (Balanc
+ 
+ | Button | Does | Endpoint |
+ |---|---|---|
+-| **Record Physical Count** | Count by denomination (notes 1000…5, coins 2 and 1, optional rare coins 0.50 / 0.25 / 0.10 / 0.01) + notes. Expected = current ledger balance | `POST /float/vault-counts` |
+-| **Resolve** (row, discrepancy only) | Reason (required) + toggle *Adjust ledger to the counted amount* (default on) | `POST /float/vault-counts/:id/resolve` |
+-| **Generate report** | Downloads a PDF: fund summary, latest count by denomination, count history, full ledger | Data: `GET /float/reports/reconciliation` |
++| **Record Physical Count** | Count by denomination (notes 1000…5, coins 2 and 1, optional rare coins 0.50 / 0.25 / 0.10 / 0.01) + notes. Expected = current ledger balance | `POST /vault-counts` |
++| **Resolve** (row, discrepancy only) | Reason (required) + toggle *Adjust ledger to the counted amount* (default on) | `POST /vault-counts/:id/resolve` |
++| **Generate report** | Downloads a PDF: fund summary, latest count by denomination, count history, full ledger | Data: `GET /reports/reconciliation` |
+ 
+-### 7.7 Ledger (`/float/fund`) — `pages/float/fund.vue`
++### 7.7 Ledger (`/fund`) — `pages/fund.vue`
+ 
+ Shows: Cash in vault, Out with GS staff, Opening balance (with date); transactions newest first, 5 per page.
+ 
+@@ -321,11 +321,11 @@ Columns: Date, Type, Description (+ recorded by; links to the request when there
+ 
+ | Button | Does | Endpoint |
+ |---|---|---|
+-| **Top-Up Fund** | Amount (required), Funding reference / voucher no (required), Notes | `POST /float/fund/top-ups` |
++| **Top-Up Fund** | Amount (required), Funding reference / voucher no (required), Notes | `POST /fund/top-ups` |
+ 
+ ## 8. API
+ 
+-Base path: **`/float`** (the frontend will proxy it as `/api/float/...` through Nuxt, the same way `stores/casemanagement/cases.ts` calls `/api/casemanagement/...`).
++Base path: **`/`** (the frontend will proxy it as `/api/float/...` through Nuxt, the same way `stores/casemanagement/cases.ts` calls `/api/casemanagement/...`).
+ 
+ ### 8.1 Conventions
+ 
+@@ -350,22 +350,22 @@ Base path: **`/float`** (the frontend will proxy it as `/api/float/...` through
+ 
+ | Method | Path | Role | Body | Returns |
+ |---|---|---|---|---|
+-| GET | `/float/requests` | any | Query: `status` (comma list), `requesterId` or `mine=true`, `q`, `sort` (`createdAt`, `closedAt`), `order`, `page`, `pageSize` | `PaginatedResponse<PettyCashRequestSummary>` |
+-| GET | `/float/requests/:id` | any | — | `PettyCashRequest` (with expenses, issuances, returns, timeline, `allowedActions`) |
+-| POST | `/float/requests` | GS_REQUESTER | `{ purpose, requestedAmount, neededBy }` | `PettyCashRequest` |
+-| PATCH | `/float/requests/:id` | owner | `{ purpose?, requestedAmount?, neededBy?, expectedVersion? }` | `PettyCashRequest` |
+-| POST | `/float/requests/:id/authorize` | GS_MANAGER | `{}` | `PettyCashRequest` |
+-| POST | `/float/requests/:id/reject` | GS_MANAGER | `{ reason? }` | `PettyCashRequest` |
+-| POST | `/float/requests/:id/notify-collection` | FINANCE_* | `{ amount, reason? }` (reason required if amount ≠ requested) | `PettyCashRequest` |
+-| POST | `/float/requests/:id/confirm-receipt` | owner | `{}` | `PettyCashRequest` |
+-| POST | `/float/requests/:id/expenses` | owner | `CreateExpenseDto` | `PettyCashRequest` |
+-| DELETE | `/float/requests/:id/expenses/:expenseId` | owner | — | `PettyCashRequest` |
+-| POST | `/float/requests/:id/settle` | owner | `{}` | `PettyCashRequest` |
+-| POST | `/float/requests/:id/reminders` | FINANCE_* | `{}` | `PettyCashRequest` |
+-| POST | `/float/requests/:id/return-for-correction` | FINANCE_* | `{ note }` | `PettyCashRequest` |
+-| POST | `/float/requests/:id/finalize` | FINANCE_* | `{ denominations?, dynamicsReference? }` | `PettyCashRequest` |
+-
+-List presets the UI needs (all via `GET /float/requests`):
++| GET | `/requests` | any | Query: `status` (comma list), `requesterId` or `mine=true`, `q`, `sort` (`createdAt`, `closedAt`), `order`, `page`, `pageSize` | `PaginatedResponse<PettyCashRequestSummary>` |
++| GET | `/requests/:id` | any | — | `PettyCashRequest` (with expenses, issuances, returns, timeline, `allowedActions`) |
++| POST | `/requests` | GS_REQUESTER | `{ purpose, requestedAmount, neededBy }` | `PettyCashRequest` |
++| PATCH | `/requests/:id` | owner | `{ purpose?, requestedAmount?, neededBy?, expectedVersion? }` | `PettyCashRequest` |
++| POST | `/requests/:id/authorize` | GS_MANAGER | `{}` | `PettyCashRequest` |
++| POST | `/requests/:id/reject` | GS_MANAGER | `{ reason? }` | `PettyCashRequest` |
++| POST | `/requests/:id/notify-collection` | FINANCE_* | `{ amount, reason? }` (reason required if amount ≠ requested) | `PettyCashRequest` |
++| POST | `/requests/:id/confirm-receipt` | owner | `{}` | `PettyCashRequest` |
++| POST | `/requests/:id/expenses` | owner | `CreateExpenseDto` | `PettyCashRequest` |
++| DELETE | `/requests/:id/expenses/:expenseId` | owner | — | `PettyCashRequest` |
++| POST | `/requests/:id/settle` | owner | `{}` | `PettyCashRequest` |
++| POST | `/requests/:id/reminders` | FINANCE_* | `{}` | `PettyCashRequest` |
++| POST | `/requests/:id/return-for-correction` | FINANCE_* | `{ note }` | `PettyCashRequest` |
++| POST | `/requests/:id/finalize` | FINANCE_* | `{ denominations?, dynamicsReference? }` | `PettyCashRequest` |
++
++List presets the UI needs (all via `GET /requests`):
+ 
+ | Screen | Query |
+ |---|---|
+@@ -378,9 +378,9 @@ List presets the UI needs (all via `GET /float/requests`):
+ 
+ | Method | Path | Role | Body | Returns |
+ |---|---|---|---|---|
+-| POST | `/float/files` | any | `multipart/form-data` `file` (jpeg, png, heic, webp, pdf; max 10 MB) | `{ fileId, fileName, contentType, size, url }` |
+-| GET | `/float/files/:fileId` | any | — | File stream (signed URL or proxied) |
+-| POST | `/float/ocr/receipts` | any | `{ fileId }` | `{ supplierName?, invoiceNumber?, amount?, expenseDate?, confidence }` |
++| POST | `/files` | any | `multipart/form-data` `file` (jpeg, png, heic, webp, pdf; max 10 MB) | `{ fileId, fileName, contentType, size, url }` |
++| GET | `/files/:fileId` | any | — | File stream (signed URL or proxied) |
++| POST | `/ocr/receipts` | any | `{ fileId }` | `{ supplierName?, invoiceNumber?, amount?, expenseDate?, confidence }` |
+ 
+ `CreateExpenseDto`:
+ 
+@@ -403,17 +403,17 @@ OCR is a suggestion only. The user always reviews and can change every field. If
+ 
+ | Method | Path | Role | Body | Returns |
+ |---|---|---|---|---|
+-| GET | `/float/fund` | any | — | `PettyCashFund & { cashWithStaff: number }` |
+-| GET | `/float/fund/transactions` | any | `page`, `pageSize`, `type?`, `from?`, `to?` | `PaginatedResponse<FundTransaction>` newest first |
+-| POST | `/float/fund/top-ups` | FINANCE_* | `{ amount, reference, notes? }` | `FundTransaction` |
++| GET | `/fund` | any | — | `PettyCashFund & { cashWithStaff: number }` |
++| GET | `/fund/transactions` | any | `page`, `pageSize`, `type?`, `from?`, `to?` | `PaginatedResponse<FundTransaction>` newest first |
++| POST | `/fund/top-ups` | FINANCE_* | `{ amount, reference, notes? }` | `FundTransaction` |
+ 
+ ### 8.5 Vault counts (reconciliation)
+ 
+ | Method | Path | Role | Body | Returns |
+ |---|---|---|---|---|
+-| GET | `/float/vault-counts` | any | `page`, `pageSize` | `PaginatedResponse<DailyReconciliation>` newest first |
+-| POST | `/float/vault-counts` | FINANCE_* | `{ denominations: DenominationCounts, notes? }` | `DailyReconciliation` |
+-| POST | `/float/vault-counts/:id/resolve` | FINANCE_SUPERVISOR | `{ resolutionNotes, adjustLedger: boolean }` | `DailyReconciliation` |
++| GET | `/vault-counts` | any | `page`, `pageSize` | `PaginatedResponse<DailyReconciliation>` newest first |
++| POST | `/vault-counts` | FINANCE_* | `{ denominations: DenominationCounts, notes? }` | `DailyReconciliation` |
++| POST | `/vault-counts/:id/resolve` | FINANCE_SUPERVISOR | `{ resolutionNotes, adjustLedger: boolean }` | `DailyReconciliation` |
+ 
+ Rules:
+ 
+@@ -426,59 +426,59 @@ Rules:
+ 
+ | Method | Path | Returns |
+ |---|---|---|
+-| GET | `/float/stats` | `{ pendingApproval, pendingDisbursement, unsettled, awaitingClosure, cashInVault, cashWithStaff, lastCountAt, unresolvedDiscrepancies }` |
++| GET | `/stats` | `{ pendingApproval, pendingDisbursement, unsettled, awaitingClosure, cashInVault, cashWithStaff, lastCountAt, unresolvedDiscrepancies }` |
+ 
+ ### 8.7 Current user
+ 
+ | Method | Path | Returns |
+ |---|---|---|
+-| GET | `/float/me` | `{ id, name, email, department, roles: Role[] }` |
++| GET | `/me` | `{ id, name, email, department, roles: Role[] }` |
+ 
+ ### 8.8 Reports and PDFs
+ 
+-The UI generates both PDFs in the browser (`utils/floatPdf.ts`, using `html2pdf.js`). The backend only has to return the data:
++The UI generates both PDFs in the browser (`utils/pettyCashPdf.ts`, using `html2pdf.js`). The backend only has to return the data:
+ 
+ | Method | Path | Returns |
+ |---|---|---|
+-| GET | `/float/requests/:id` | Voucher data (request must be `closed` for the PDF button to show) |
+-| GET | `/float/reports/reconciliation?from&to` | `{ fund, cashWithStaff, totals: { topUps, cashIssued, cashReturned, reimbursements, adjustments }, latestCount, counts, transactions, generatedAt, preparedBy }` |
++| GET | `/requests/:id` | Voucher data (request must be `closed` for the PDF button to show) |
++| GET | `/reports/reconciliation?from&to` | `{ fund, cashWithStaff, totals: { topUps, cashIssued, cashReturned, reimbursements, adjustments }, latestCount, counts, transactions, generatedAt, preparedBy }` |
+ 
+-Optional later: server-side PDFs (`GET /float/requests/:id/pdf`, `GET /float/reports/reconciliation.pdf`) for archiving or emailing. If you add them, match the layout of the client PDFs.
++Optional later: server-side PDFs (`GET /requests/:id/pdf`, `GET /reports/reconciliation.pdf`) for archiving or emailing. If you add them, match the layout of the client PDFs.
+ 
+ ## 9. Data model
+ 
+-Names follow `types/float.ts`. Suggested tables (adapt to your ORM, TypeORM or Prisma).
++Names follow `types/pettyCash.ts`. Suggested tables (adapt to your ORM, TypeORM or Prisma).
+ 
+-### `float_fund`
++### `funds`
+ `id` PK (text, e.g. `FUND-MVR-01`) · `name` · `currency` (`MVR`) · `opening_balance` numeric · `effective_date` date · `current_expected_balance` numeric · `custodian` · `description` · `created_at` · `updated_at`
+ 
+-### `float_request`
++### `requests`
+ `id` PK text (`PC-YYYY-NNNN`) · `fund_id` FK · `purpose` text · `department` · `requester_id` FK user · `status` enum · `requested_amount` numeric · `approved_amount` numeric default 0 · `total_cash_issued` numeric default 0 · `estimated_closing_date` date (needed by) · `effective_closing_date` date · `dynamics_reference` text null · `notes` · `rejection_reason` · `correction_note` · `cancellation_reason` · `closure_notes` · `closed_by` FK user · `closed_at` · `version` int · `created_at` · `updated_at`
+ 
+ Indexes: `(status)`, `(requester_id, status)`, `(closed_at desc)`, trigram/full-text on `purpose` for search.
+ 
+ Voucher numbers: `PC-{YYYY}-{NNNN}`, sequence **per calendar year**, generated inside the insert transaction (sequence table or `SELECT … FOR UPDATE` on a counter row). Never reuse numbers.
+ 
+-### `float_cash_issuance`
++### `cash_issuances`
+ `id` · `request_id` FK · `amount` · `issued_by` · `issued_at` · `acknowledged_by` · `acknowledged_at` · `is_additional` bool · `notes`
+ (One row is written at T6, already acknowledged. `is_additional` is reserved for the future "additional cash" feature.)
+ 
+-### `float_expense`
++### `expenses`
+ `id` · `request_id` FK · `supplier_name` · `category` · `invoice_number` · `expense_date` date · `amount` · `description` · `file_id` FK null · `ocr_extracted` bool · `ocr_confidence` int null · `verification_status` enum (`submitted`, `verified`, `returned_for_correction`, `rejected`; default `submitted`) · `correction_note` · `verified_by` · `verified_at` · `created_at`
+ 
+-### `float_cash_return`
++### `cash_returns`
+ `id` · `request_id` FK · `expected_amount` · `actual_amount` · `difference` · `denominations` jsonb · `received_by` · `returned_by` · `return_date` · `notes` · `acknowledged` bool
+ 
+-### `float_fund_transaction` (append-only)
++### `fund_transactions` (append-only)
+ `id` · `fund_id` FK · `type` enum (`opening_balance`, `top_up`, `cash_issued`, `cash_returned`, `reimbursement`, `adjustment`) · `amount` numeric signed · `running_balance` numeric · `date` timestamptz · `request_id` FK null · `reference` · `notes` · `recorded_by` FK user · `created_at`
+ Revoke UPDATE/DELETE on this table for the app's DB user, or enforce with a trigger.
+ 
+-### `float_vault_count` (`DailyReconciliation`)
++### `vault_counts` (`DailyReconciliation`)
+ `id` · `fund_id` FK · `count_date` timestamptz · `expected_balance` · `actual_cash_count` · `difference` · `denominations` jsonb · `counted_by` · `notes` · `status` enum (`balanced`, `discrepancy_pending`, `resolved`) · `resolved_by` · `resolved_at` · `resolution_notes` · `adjustment_transaction_id` FK null
+ 
+ `denominations` keys and values (MVR): `note1000` 1000, `note500` 500, `note100` 100, `note50` 50, `note20` 20, `note10` 10, `note5` 5, `coin2` 2, `coin1` 1, `coin0_5` 0.50, `coin0_25` 0.25, `coin0_10` 0.10, `coin0_1` 0.01 (1 laari). The server computes totals from these; never accept a client total.
+ 
+-### `float_timeline_event` (audit)
++### `timeline_events` (audit)
+ `id` · `request_id` FK · `type` · `title` · `description` · `actor_id` · `actor_name` · `actor_role` · `metadata` jsonb · `created_at`
+ 
+ Timeline `type` values used by the UI: `created`, `approved`, `rejected`, `finance_processed`, `handover`, `acknowledged`, `expense_added`, `expense_returned`, `return_recorded`, `closed`, `reminder`. Also defined: `expense_verified`, `additional_requested`, `additional_approved`, `additional_issued`, `cancelled`, `extended`.
+@@ -501,11 +501,11 @@ Suggested titles (the UI shows them as written):
+ 
+ ## 10. Response shapes
+ 
+-Use the interfaces in `types/float.ts` as the contract. Additions and clarifications:
++Use the interfaces in `types/pettyCash.ts` as the contract. Additions and clarifications:
+ 
+ ```ts
+ // PettyCashRequest (additions)
+-correctionNote?: string;          // already in types/float.ts
++correctionNote?: string;          // already in types/pettyCash.ts
+ allowedActions: string[];         // new, see 8.1
+ version: number;                  // new
+ requester: { id; name; email; avatar? };   // embed, don't make the UI fetch users
+@@ -515,7 +515,7 @@ Omit<PettyCashRequest, 'expenses' | 'issuances' | 'returns' | 'timeline' | 'addi
+   & { expenseCount: number; expenseTotal: number }
+ 
+ // ExpenseItem
+-receiptUrl?: string;              // short-lived URL from /float/files/:fileId
++receiptUrl?: string;              // short-lived URL from /files/:fileId
+ receiptFileName?: string;         // undefined = "No attachment" in the UI
+ 
+ // ActivityTimelineItem.timestamp: ISO string (UI formats it)
+@@ -578,8 +578,8 @@ Seed: fund opening balance MVR 25,000, vault 18,450.
+ ## 13. Suggested NestJS structure and build order
+ 
+ ```
+-src/float/
+-  float.module.ts
++src/petty-cash/
++  petty-cash.module.ts
+   common/            roles.decorator.ts, roles.guard.ts, money.ts (decimal helpers), idempotency.interceptor.ts
+   requests/          requests.controller.ts, requests.service.ts, request-state-machine.ts, dto/*.dto.ts
+   expenses/          expenses.service.ts, dto/create-expense.dto.ts
+@@ -589,7 +589,7 @@ src/float/
+   stats/             stats.controller.ts
+   reports/           reports.controller.ts
+   timeline/          timeline.service.ts
+-  notifications/     float-events.ts, float-notifications.listener.ts (@nestjs/event-emitter)
++  notifications/     petty-cash-events.ts, petty-cash-notifications.listener.ts (@nestjs/event-emitter)
+ ```
+ 
+ Use `class-validator` DTOs, for example:
+@@ -609,7 +609,7 @@ export class FinalizeDto {
+ 
+ Build order:
+ 
+-1. **Foundation:** schema + migrations, seed (fund, opening balance, sample users per role), `RolesGuard`, `GET /float/me`, error filter producing `ApiError`.
++1. **Foundation:** schema + migrations, seed (fund, opening balance, sample users per role), `RolesGuard`, `GET /me`, error filter producing `ApiError`.
+ 2. **Ledger:** `LedgerService.post()` with row lock, fund endpoints, top-ups. Tests 12 and 14.
+ 3. **Requests to cash out:** create, edit, list/detail with `allowedActions`, authorize, reject, notify, confirm receipt. Tests 5–7, 10, 16.
+ 4. **Receipts and settlement:** files, OCR stub, expenses, settle, reminders, return for correction. Tests 8–9.
+@@ -621,30 +621,30 @@ Build order:
+ 
+ The frontend currently calls a Pinia store with mock data. Integration means replacing each store action with an API call and the store's arrays with fetched data. Mapping:
+ 
+-| Store (`stores/useFloatStore.ts`) | Endpoint |
++| Store (`stores/usePettyCashStore.ts`) | Endpoint |
+ |---|---|
+-| `requests`, `allRequests` | `GET /float/requests` (with the presets in 8.2) |
+-| `getRequestById(id)` | `GET /float/requests/:id` |
+-| `createRequest({ purpose, requestedAmount, estimatedClosingDate })` | `POST /float/requests` (`neededBy = estimatedClosingDate`) |
+-| `updateRequest(id, { purpose, requestedAmount, neededBy })` | `PATCH /float/requests/:id` |
++| `requests`, `allRequests` | `GET /requests` (with the presets in 8.2) |
++| `getRequestById(id)` | `GET /requests/:id` |
++| `createRequest({ purpose, requestedAmount, estimatedClosingDate })` | `POST /requests` (`neededBy = estimatedClosingDate`) |
++| `updateRequest(id, { purpose, requestedAmount, neededBy })` | `PATCH /requests/:id` |
+ | `approveRequestByManager(id)` | `POST …/authorize` |
+ | `rejectRequestByManager(id, reason)` | `POST …/reject` |
+ | `prepareCashByFinance(id, { approvedAmount, notes })` | `POST …/notify-collection` `{ amount, reason }` |
+ | `collectCash(id)` | `POST …/confirm-receipt` |
+ | `addExpense(id, …)` / `deleteExpense(id, expenseId)` | `POST …/expenses` / `DELETE …/expenses/:expenseId` |
+-| `simulateOCR(fileName)` | `POST /float/files` then `POST /float/ocr/receipts` |
++| `simulateOCR(fileName)` | `POST /files` then `POST /ocr/receipts` |
+ | `submitForClosure(id)` | `POST …/settle` |
+ | `sendReminder(id)` | `POST …/reminders` |
+ | `returnSettlementForCorrection(id, note)` | `POST …/return-for-correction` |
+ | `recordCashReturn` + `recordReimbursement` + `closeRequest(id, _, dynamicsRef)` | **one call:** `POST …/finalize` `{ denominations, dynamicsReference }` |
+-| `fund`, `cashWithStaff` | `GET /float/fund` |
+-| `transactions` | `GET /float/fund/transactions` |
+-| `addFundTopUp(…)` | `POST /float/fund/top-ups` |
+-| `reconciliations` | `GET /float/vault-counts` |
+-| `recordDailyCount(…)` | `POST /float/vault-counts` |
+-| `resolveDiscrepancy(id, { resolutionNotes, adjustmentAmount })` | `POST /float/vault-counts/:id/resolve` `{ resolutionNotes, adjustLedger: adjustmentAmount !== 0 }` |
+-| `fundOverview`, stat counts | `GET /float/stats` |
+-| `currentUser` | `GET /float/me` |
++| `fund`, `cashWithStaff` | `GET /fund` |
++| `transactions` | `GET /fund/transactions` |
++| `addFundTopUp(…)` | `POST /fund/top-ups` |
++| `reconciliations` | `GET /vault-counts` |
++| `recordDailyCount(…)` | `POST /vault-counts` |
++| `resolveDiscrepancy(id, { resolutionNotes, adjustmentAmount })` | `POST /vault-counts/:id/resolve` `{ resolutionNotes, adjustLedger: adjustmentAmount !== 0 }` |
++| `fundOverview`, stat counts | `GET /stats` |
++| `currentUser` | `GET /me` |
+ 
+ Notes for whoever wires the frontend:
+ 
+@@ -652,7 +652,7 @@ Notes for whoever wires the frontend:
+ - Replace `v-if="item.status === …"` button checks with `allowedActions.includes(…)` so permissions come from the server.
+ - On 409, show the server `message` as a toast and refetch the request.
+ - Send an `Idempotency-Key` (e.g. `crypto.randomUUID()` per dialog open) on confirm receipt, finalize, top-up and resolve.
+-- Receipt photos: upload first (`/float/files`), keep the returned `fileId`, then create the expense with it.
++- Receipt photos: upload first (`/files`), keep the returned `fileId`, then create the expense with it.
+ - PDFs stay client-side; they read the same request/report data.
+ 
+ ## 15. Open questions
+diff --git a/docs/FLOAT_PRD.md b/docs/PETTY_CASH_PRD.md
+similarity index 100%
+rename from docs/FLOAT_PRD.md
+rename to docs/PETTY_CASH_PRD.md

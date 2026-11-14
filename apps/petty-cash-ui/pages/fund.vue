@@ -14,13 +14,15 @@
           v-if="store.currentUser.capabilities.topUp"
           label="Top-Up Fund"
           :icon="PlusIcon"
-          :disabled="store.busy"
+          :disabled="!store.isPageReady('/fund') || store.busy"
           @button-click="showTopUpModal = true"
         />
       </div>
     </header>
 
-    <div class="space-y-5 pb-16 sm:pb-0">
+    <PageSkeleton v-if="!store.isPageReady('/fund')" :stats="3" />
+
+    <div v-else class="space-y-5 pb-16 sm:pb-0">
       <!-- Stats Blocks -->
       <div class="hidden sm:block">
         <PoStatsBlock :items="statsItems" number-of-cols="grid-cols-1 sm:grid-cols-3 gap-4" />
@@ -70,7 +72,8 @@
         <PoPagination
           :total-pages="totalPages"
           :current-page="currentPage"
-          @on-page-change="handlePageChange"
+          @prev-click="handlePageChange(currentPage - 1)"
+          @next-click="handlePageChange(currentPage + 1)"
         />
       </div>
     </div>
@@ -132,7 +135,8 @@
 </template>
 
 <script setup lang="ts">
-import { formatDate, formatMoney } from '~/utils/floatFormat';
+import PageSkeleton from '~/components/petty-cash/PageSkeleton.vue';
+import { formatDate, formatMoney } from '~/utils/pettyCashFormat';
 
 import { computed, reactive, ref } from 'vue';
 import { BanknotesIcon, CalendarDaysIcon, PlusIcon, UserGroupIcon } from '@heroicons/vue/20/solid';
@@ -149,10 +153,10 @@ import {
   PoTypography,
   useToastify,
 } from '@pension/ui-kit';
-import ListRow, { type ListCell } from '~/components/float/ListRow.vue';
-import ListTable, { type ListColumn } from '~/components/float/ListTable.vue';
-import type { FundTransaction } from '~/types/float';
-import { useFloatStore } from '~/stores/useFloatStore';
+import ListRow, { type ListCell } from '~/components/petty-cash/ListRow.vue';
+import ListTable, { type ListColumn } from '~/components/petty-cash/ListTable.vue';
+import type { FundTransaction } from '~/types/pettyCash';
+import { usePettyCashStore } from '~/stores/usePettyCashStore';
 
 definePageMeta({
   layout: 'main',
@@ -162,12 +166,12 @@ useHead({
   title: 'Fund Ledger — Petty Cash',
 });
 
-const store = useFloatStore();
+const store = usePettyCashStore();
 const { showToast } = useToastify();
 
 const showTopUpModal = ref(false);
 const topUpForm = reactive({
-  amount: '5000',
+  amount: '',
   reference: '',
   notes: '',
 });
@@ -198,18 +202,18 @@ const statsItems = computed(() => [
   },
 ]);
 
-const currentPage = ref(1);
+const currentPage = computed(() => store.transactionPage);
 const itemsPerPage = 5;
 
 const totalPages = computed(() => Math.ceil(store.transactionTotal / itemsPerPage) || 1);
 
 const paginatedTransactions = computed(() => store.transactions);
 async function handlePageChange(page: number) {
+  if (store.transactionLoading || store.busy || page < 1 || page > totalPages.value) return;
   try {
     await store.fetchTransactions(page);
-    currentPage.value = page;
   } catch (err) {
-    store.error = err instanceof Error ? err.message : 'Could not load ledger.';
+    showToast(err instanceof Error ? err.message : 'Could not load ledger.', 'error');
   }
 }
 
@@ -242,7 +246,6 @@ async function handleConfirmTopUp() {
     });
     topUpForm.reference = '';
     topUpForm.notes = '';
-    currentPage.value = 1;
     showTopUpModal.value = false;
   } catch (err) {
     showToast(err instanceof Error ? err.message : 'Could not complete this action.', 'error');

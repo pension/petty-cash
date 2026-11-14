@@ -8,7 +8,7 @@ export class NotificationWriterService {
     title: string,
     text: string,
     url: string,
-    target: { recipientId?: string; audience?: string },
+    target: { recipientId?: string; audience?: string; recipientEntityId?: number },
     key: string = randomUUID(),
   ) {
     await tx.notification.upsert({

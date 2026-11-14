@@ -10,13 +10,29 @@
       </div>
     </header>
 
-    <div class="space-y-5 pb-8">
+    <PageSkeleton v-if="!store.isPageReady('/requests')" />
+
+    <div v-else class="space-y-5 pb-8">
       <PoCard class="p-3 pl-4">
         <div class="flex flex-col lg:flex-row lg:items-center gap-3">
           <div class="grow">
             <PoSearch
-              v-model="searchQuery"
+              :model-value="searchQuery"
               placeholder="Search voucher no, particulars, requester or Dynamics ref..."
+              @button-click="loadHistory(1)"
+              @update:model-value="searchHistory"
+            />
+          </div>
+          <div class="shrink-0">
+            <PoDateRangePicker v-model="dateRange" @update:model-value="loadHistory(1)" />
+          </div>
+          <div class="shrink-0">
+            <PoButton
+              action-type="ghost"
+              :label="isFiltered ? 'Download filtered' : 'Download all'"
+              :icon="ArrowDownTrayIcon"
+              :disabled="store.busy || downloadingList"
+              @button-click="handleDownloadList"
             />
           </div>
           <div class="hidden sm:flex shrink-0 items-center gap-3">
@@ -24,7 +40,8 @@
             <PoPagination
               :total-pages="totalPages"
               :current-page="currentPage"
-              @on-page-change="(p: number) => (currentPage = p)"
+              @prev-click="changePage(currentPage - 1)"
+              @next-click="changePage(currentPage + 1)"
             />
           </div>
         </div>
@@ -41,13 +58,14 @@
             :meta="
               [
                 item.id,
+                item.requester.name,
                 `Closed ${formatDate(item.closedAt || item.updatedAt)}`,
                 item.dynamicsReference,
               ]
                 .filter(Boolean)
                 .join(' · ')
             "
-            :amount="formatMoney(floatAmount(item))"
+            :amount="formatMoney(pettyCashAmount(item))"
           >
             <template #actions>
               <PoButton
@@ -55,7 +73,7 @@
                 action-type="ghost"
                 label="PDF"
                 :icon="ArrowDownTrayIcon"
-                :disabled="store.busy || downloadingId === item.id"
+                :disabled="store.busy || downloadingId !== null"
                 @button-click="handleDownload(item)"
               />
             </template>
@@ -77,7 +95,8 @@
         <PoPagination
           :total-pages="totalPages"
           :current-page="currentPage"
-          @on-page-change="(p: number) => (currentPage = p)"
+          @prev-click="changePage(currentPage - 1)"
+          @next-click="changePage(currentPage + 1)"
         />
       </div>
     </div>
@@ -85,7 +104,8 @@
 </template>
 
 <script setup lang="ts">
-import { formatDate, formatMoney } from '~/utils/floatFormat';
+import PageSkeleton from '~/components/petty-cash/PageSkeleton.vue';
+import { formatDate, formatMoney } from '~/utils/pettyCashFormat';
 
 import { computed, ref, watch } from 'vue';
 import { ArrowDownTrayIcon } from '@heroicons/vue/20/solid';
@@ -93,17 +113,20 @@ import {
   PoButton,
   PoCard,
   PoContentArea,
+  PoDateRangePicker,
   PoEmpty,
   PoPageTitle,
   PoPagination,
   PoSearch,
+  useToastify,
 } from '@pension/ui-kit';
-import ListRow, { type ListCell } from '~/components/float/ListRow.vue';
-import ListTable, { type ListColumn } from '~/components/float/ListTable.vue';
-import { useFloatStore } from '~/stores/useFloatStore';
-import type { PettyCashSummary as PettyCashRequest } from '~/types/float';
-import { downloadRequestPdf } from '~/utils/floatPdf';
-import { floatAmount } from '~/utils/floatStatus';
+import ListRow, { type ListCell } from '~/components/petty-cash/ListRow.vue';
+import ListTable, { type ListColumn } from '~/components/petty-cash/ListTable.vue';
+import { usePettyCashStore } from '~/stores/usePettyCashStore';
+import type { PettyCashSummary as PettyCashRequest } from '~/types/pettyCash';
+import { downloadHistoryCsv } from '~/utils/pettyCashCsv';
+import { downloadRequestPdf } from '~/utils/pettyCashPdf';
+import { pettyCashAmount } from '~/utils/pettyCashStatus';
 
 definePageMeta({
   layout: 'main',
@@ -113,38 +136,63 @@ useHead({
   title: 'Petty Cash — History',
 });
 
-const store = useFloatStore();
+const store = usePettyCashStore();
+const { showToast } = useToastify();
 
-const searchQuery = ref('');
-const currentPage = ref(1);
+const searchQuery = ref(String(store.requestQuery.q || ''));
+const dateRange = ref<{ from: string; to: string } | null>(
+  store.requestQuery.from || store.requestQuery.to
+    ? { from: String(store.requestQuery.from || ''), to: String(store.requestQuery.to || '') }
+    : null,
+);
+const currentPage = computed(() => store.listPage);
 const itemsPerPage = 10;
 
 const closedRequests = computed(() => store.allRequests);
 const filteredRequests = closedRequests;
 const paginatedRequests = closedRequests;
 const totalPages = computed(() => Math.ceil(store.listTotal / itemsPerPage) || 1);
-watch([searchQuery, currentPage], async () => {
+const isFiltered = computed(() => !!searchQuery.value.trim() || !!dateRange.value);
+async function loadHistory(page: number) {
   try {
-    await store.fetchRequests({
-      status: 'closed',
-      sort: 'closedAt',
-      order: 'desc',
-      q: searchQuery.value,
-      page: currentPage.value,
-      pageSize: itemsPerPage,
-    });
+    await store.fetchRequests(
+      {
+        status: 'closed',
+        sort: 'closedAt',
+        order: 'desc',
+        q: searchQuery.value.trim(),
+        from: dateRange.value?.from || undefined,
+        to: dateRange.value?.to || undefined,
+        page,
+        pageSize: itemsPerPage,
+      },
+      '/requests/history',
+    );
   } catch (err) {
-    store.error = err instanceof Error ? err.message : 'Could not load history.';
+    showToast(err instanceof Error ? err.message : 'Could not load history.', 'error');
   }
-});
-watch(searchQuery, () => {
-  currentPage.value = 1;
-});
+}
+watch(
+  () => store.requestQuery.q,
+  (query) => {
+    const value = String(query || '');
+    if (searchQuery.value.trim() !== value) searchQuery.value = value;
+  },
+);
+async function searchHistory(value: string) {
+  searchQuery.value = value;
+  await loadHistory(1);
+}
+async function changePage(page: number) {
+  if (store.listLoading || store.busy || page < 1 || page > totalPages.value) return;
+  await loadHistory(page);
+}
 
 // Desktop columns
 const columns: ListColumn[] = [
   { label: 'Closed', width: '6rem' },
   { label: 'Voucher no', width: '7.5rem' },
+  { label: 'Requester', width: '8rem' },
   { label: 'Particulars' },
   { label: 'Petty cash (MVR)', width: '7rem', align: 'right' },
   { label: 'Dynamics ref', width: '8rem' },
@@ -155,9 +203,10 @@ function cells(item: PettyCashRequest): ListCell[] {
   return [
     { text: formatDate(item.closedAt || item.updatedAt), class: 'tabular-nums' },
     { text: item.id, to: `/requests/${item.id}` },
+    { text: item.requester.name },
     { text: item.purpose, wrap: true },
     {
-      text: formatMoney(floatAmount(item)),
+      text: formatMoney(pettyCashAmount(item)),
       align: 'right',
       class: 'tabular-nums font-semibold text-slate-900',
     },
@@ -168,12 +217,42 @@ function cells(item: PettyCashRequest): ListCell[] {
   ];
 }
 
+const downloadingList = ref(false);
+
+async function handleDownloadList() {
+  if (downloadingList.value) return;
+  downloadingList.value = true;
+  try {
+    const rows = await store.fetchAllHistory({
+      status: 'closed',
+      sort: 'closedAt',
+      order: 'desc',
+      q: searchQuery.value.trim() || undefined,
+      from: dateRange.value?.from || undefined,
+      to: dateRange.value?.to || undefined,
+    });
+    if (rows.length === 0) {
+      showToast('No closed requests match this filter.', 'info');
+      return;
+    }
+    const suffix = isFiltered.value ? 'filtered' : 'all';
+    downloadHistoryCsv(rows, `petty-cash-history-${suffix}-${new Date().toISOString().slice(0, 10)}.csv`);
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : 'Could not download the list.', 'error');
+  } finally {
+    downloadingList.value = false;
+  }
+}
+
 const downloadingId = ref<string | null>(null);
 
 async function handleDownload(item: PettyCashRequest) {
+  if (downloadingId.value) return;
   downloadingId.value = item.id;
   try {
-    await downloadRequestPdf(await store.fetchRequest(item.id));
+    await downloadRequestPdf(await store.fetchRequest(item.id), store.receiptBlob);
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : 'Could not generate the voucher.', 'error');
   } finally {
     downloadingId.value = null;
   }

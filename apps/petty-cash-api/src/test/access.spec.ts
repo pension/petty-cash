@@ -1,3 +1,7 @@
+import { PrismaModule } from '../prisma/prisma.module';
+import { PrismaService } from '../prisma/prisma.service';
+import { StaffAssignmentsController } from '../staff-assignments/staff-assignments.controller';
+import { StaffAssignmentsService } from '../staff-assignments/staff-assignments.service';
 jest.mock('@pension/midgard/dist/env', () => ({ APP_ENV: 'production', APP_NAME: 'petty-cash' }));
 import { DiscoveryModule } from '@nestjs/core';
 import { IdentityController } from '@pension/midgard/dist/nest-client/identity.controller';
@@ -35,7 +39,7 @@ import { StatisticsService } from '../statistics/statistics.service';
 import { VaultCountsController } from '../vault-counts/vault-counts.controller';
 import { VaultCountsService } from '../vault-counts/vault-counts.service';
 
-import { PERMISSIONS } from '../auth/permissions';
+import { PERMISSIONS, ROLE_PERMISSION_GROUPS } from '../auth/permissions';
 import { AuthModule } from '../auth/auth.module';
 import { IdempotencyController } from '../idempotency/idempotency.controller';
 import { IdempotencyService } from '../idempotency/idempotency.service';
@@ -64,11 +68,20 @@ jest.mock('@pension/midgard', () => ({
     }
   },
 }));
-const routes: [string, string][] = [
+const helperRoutes: [string, string][] = [
   ['GET', 'access'],
   ['POST', 'idempotency-keys'],
+];
+const routes: [string, string][] = [
+  ['GET', 'staff-assignments'],
+  ['POST', 'staff-assignments/lookup'],
+  ['POST', 'staff-assignments'],
+  ['DELETE', 'staff-assignments/test'],
   ['GET', 'stats'],
   ['GET', 'requests'],
+  ['GET', 'requests/history'],
+  ['GET', 'approvals'],
+  ['GET', 'finance'],
   ['POST', 'requests'],
   ['GET', 'requests/PC-test'],
   ['PATCH', 'requests/PC-test'],
@@ -104,10 +117,11 @@ describe('MPAO boundary on all HTTP routes', () => {
     process.env.MPAO_ENTITY_ID = '1';
     process.env.APP_NAME = 'petty-cash';
     const module = await Test.createTestingModule({
-      imports: [IdentityTestModule, AuthModule, DiscoveryModule],
+      imports: [IdentityTestModule, AuthModule, DiscoveryModule, PrismaModule],
       controllers: [
         IdentityController,
         AccessController,
+        StaffAssignmentsController,
         IdempotencyController,
         RequestsController,
         ApprovalsController,
@@ -124,12 +138,10 @@ describe('MPAO boundary on all HTTP routes', () => {
       ],
       providers: [
         IdempotencyService,
+        AccessService,
         {
-          provide: AccessService,
-          useValue: new Proxy(
-            {},
-            { get: (_target, property) => (property === 'then' ? undefined : touched) },
-          ),
+          provide: StaffAssignmentsService,
+          useValue: { list: touched, lookup: touched, add: touched, remove: touched },
         },
         {
           provide: RequestsService,
@@ -216,12 +228,20 @@ describe('MPAO boundary on all HTTP routes', () => {
           ),
         },
       ],
-    }).compile();
+    })
+      .overrideProvider(PrismaService)
+      .useValue({
+        staffAssignment: {
+          findMany: jest.fn().mockResolvedValue([]),
+          findFirst: jest.fn().mockResolvedValue(null),
+        },
+      })
+      .compile();
     app = module.createNestApplication();
     await app.init();
   });
   afterAll(() => app.close());
-  test('issues distinct server UUIDs only for an authorized MPAO identity', async () => {
+  test('issues distinct server UUIDs for an MPAO identity without action permissions', async () => {
     await request(app.getHttpServer() as Server)
       .post('/idempotency-keys')
       .expect(401);
@@ -230,7 +250,7 @@ describe('MPAO boundary on all HTTP routes', () => {
         .post('/idempotency-keys')
         .set('Authorization', 'Bearer test')
         .set('x-test-org', '1')
-        .set('x-test-permissions', 'petty-cash.idempotency.create')
+        .set('x-test-role', 'none')
         .expect('Cache-Control', 'no-store')
         .expect(201);
     const first = await issue();
@@ -240,7 +260,7 @@ describe('MPAO boundary on all HTTP routes', () => {
     );
     expect((second.body as { key: string }).key).not.toBe((first.body as { key: string }).key);
   });
-  test.each(routes)(
+  test.each([...routes, ...helperRoutes])(
     '%s /%s rejects foreign org before touching business data',
     async (method, path) => {
       touched.mockClear();
@@ -262,16 +282,19 @@ describe('MPAO boundary on all HTTP routes', () => {
       .expect(403);
     expect(touched).not.toHaveBeenCalled();
   });
-  test('requires identity and exact Petty Cash access, even for MPAO', async () => {
+  test('returns no capabilities for an MPAO identity without action permissions', async () => {
     await request(app.getHttpServer() as Server)
       .get('/access')
       .expect(401);
-    await request(app.getHttpServer() as Server)
+    const response = await request(app.getHttpServer() as Server)
       .get('/access')
       .set('Authorization', 'Bearer test')
       .set('x-test-org', '1')
       .set('x-test-role', 'none')
-      .expect(403);
+      .expect(200);
+    const body = response.body as Awaited<ReturnType<AccessService['get']>>;
+    expect(body.roles).toEqual([]);
+    expect(Object.values(body.capabilities).every((value) => value === false)).toBe(true);
     await request(app.getHttpServer() as Server)
       .get('/access')
       .set('Authorization', 'Bearer test')
@@ -335,6 +358,49 @@ describe('MPAO boundary on all HTTP routes', () => {
           p.description.trim().length > 0,
       ),
     ).toBe(true);
+  });
+  test.each([
+    ['request', '/approvals', 200],
+    ['request', '/requests/history', 200],
+    ['request', '/finance', 403],
+    ['request', '/fund/transactions', 403],
+    ['request', '/vault-counts', 403],
+    ['finance', '/finance', 200],
+    ['finance', '/fund/transactions', 200],
+    ['finance', '/vault-counts', 200],
+    ['finance', '/approvals', 403],
+    ['finance', '/requests/history', 200],
+    ['finance', '/requests', 403],
+  ] as const)('%s role: %s returns %s', async (role, path, status) => {
+    await request(app.getHttpServer() as Server)
+      .get(path)
+      .set('Authorization', 'Bearer test')
+      .set('x-test-org', '1')
+      .set(
+        'x-test-permissions',
+        ROLE_PERMISSION_GROUPS[role].map((p) => `petty-cash.${p}`).join(','),
+      )
+      .expect(status);
+  });
+  test('SQL role memberships match the role templates exactly', () => {
+    const sql = readFileSync(
+      join(__dirname, '../../../../docs/sql/petty-cash-permissions.sql'),
+      'utf8',
+    );
+    const rows = [...sql.matchAll(/'([a-z]+\.[a-z]+)', ([01]), ([01])\)/g)];
+    expect(rows.length).toBe(PERMISSIONS.length);
+    expect(
+      rows
+        .filter((r) => r[2] === '1')
+        .map((r) => r[1])
+        .sort(),
+    ).toEqual([...ROLE_PERMISSION_GROUPS.request].sort());
+    expect(
+      rows
+        .filter((r) => r[3] === '1')
+        .map((r) => r[1])
+        .sort(),
+    ).toEqual([...ROLE_PERMISSION_GROUPS.finance].sort());
   });
   test('production permission for create does not authorize edit', async () => {
     await request(app.getHttpServer() as Server)

@@ -12,9 +12,9 @@ import { NotificationWriterService } from './notification-writer.service';
 import { ACTION_STATES, allowedActions } from './request-policy';
 import { RequestRecordsService, requestDetail } from './request-records.service';
 import { TransactionsService } from './transactions.service';
-export type LockedRequest = Prisma.FloatRequestGetPayload<{ include: typeof requestDetail }>;
+export type LockedRequest = Prisma.PettyCashRequestGetPayload<{ include: typeof requestDetail }>;
 export type RequestChange = {
-  update: Prisma.FloatRequestUpdateInput;
+  update: Prisma.PettyCashRequestUpdateInput;
   type: string;
   title: string;
   description: string;
@@ -41,7 +41,10 @@ export class RequestWorkflowService {
   ) {
     const operation = async (tx: Prisma.TransactionClient) => {
       await tx.$queryRaw`SELECT id FROM requests WHERE id = ${id} FOR UPDATE`;
-      const request = await tx.floatRequest.findUnique({ where: { id }, include: requestDetail });
+      const request = await tx.pettyCashRequest.findUnique({
+        where: { id },
+        include: requestDetail,
+      });
       if (!request) throw new NotFoundException('Request not found.');
       if (!ACTION_STATES[action].includes(request.status))
         throw new ConflictException(
@@ -54,14 +57,19 @@ export class RequestWorkflowService {
       const result = await change(tx, request);
       if (!result) return this.records.get(id, actor, tx);
       const { update, type, title, description } = result;
-      await tx.floatRequest.update({
+      await tx.pettyCashRequest.update({
         where: { id },
         data: { ...update, version: { increment: 1 } },
       });
       await this.audit.record(tx, id, actor, type, title, description);
-      if (['edit', 'authorize', 'settle'].includes(action))
+      const audiences: Record<string, string> = {
+        edit: 'GS_MANAGER',
+        authorize: 'FINANCE_STAFF',
+        settle: 'FINANCE_STAFF',
+      };
+      if (audiences[action])
         await this.notifications.create(tx, title, description, `/requests/${id}`, {
-          audience: action === 'edit' ? 'GS_MANAGER' : 'FINANCE_STAFF',
+          audience: audiences[action],
         });
       if (
         [
@@ -75,6 +83,10 @@ export class RequestWorkflowService {
       )
         await this.notifications.create(tx, title, description, `/requests/${id}`, {
           recipientId: request.requesterId,
+        });
+      if (action === 'handOver' && update.pendingCustodianEmployeeId)
+        await this.notifications.create(tx, title, description, `/requests/${id}`, {
+          recipientEntityId: update.pendingCustodianEmployeeId as number,
         });
       return this.records.get(id, actor, tx);
     };
