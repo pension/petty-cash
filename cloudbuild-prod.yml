@@ -4,17 +4,10 @@ steps:
       - '-c'
       - >
         set -euo pipefail
-
         mkdir -p apps/petty-cash-api/secrets
-
-        gcloud secrets versions access latest --secret=$_API_GLOBAL_SECRET >
-        apps/petty-cash-api/.env
-
-        gcloud secrets versions access latest --secret=$_API_ENV_SECRET >>
-        apps/petty-cash-api/.env
-
-        gcloud secrets versions access latest --secret=global-oauth-public >
-        apps/petty-cash-api/secrets/jwtRS256.key.pub
+        gcloud secrets versions access latest --secret=$_API_GLOBAL_SECRET > apps/petty-cash-api/.env
+        gcloud secrets versions access latest --secret=$_API_ENV_SECRET >> apps/petty-cash-api/.env
+        gcloud secrets versions access latest --secret=global-oauth-public > apps/petty-cash-api/secrets/jwtRS256.key.pub
     id: SetupEnv-API
     entrypoint: bash
   - name: gcr.io/cloud-builders/docker
@@ -46,12 +39,8 @@ steps:
       - '-c'
       - >
         set -euo pipefail
-
-        gcloud secrets versions access latest --secret=$_UI_ENV_SECRET >
-        apps/petty-cash-ui/.env &&
-
-        gcloud secrets versions access latest --secret=$_API_GLOBAL_SECRET >
-        apps/petty-cash-ui/.env
+        gcloud secrets versions access latest --secret=$_API_GLOBAL_SECRET > apps/petty-cash-ui/.env &&
+        gcloud secrets versions access latest --secret=$_UI_ENV_SECRET >> apps/petty-cash-ui/.env 
     id: SetupEnv-UI
     waitFor:
       - Clean-API
@@ -62,9 +51,7 @@ steps:
     args:
       - '-c'
       - >
-        docker build --build-arg=GH_PAT=$$NPM_TOKEN -t
-        $_GCR_HOSTNAME/$PROJECT_ID/$_UI_SERVICE_NAME:$COMMIT_SHA -f
-        Dockerfile.ui .
+        docker build --build-arg=GH_PAT=$$NPM_TOKEN -t $_GCR_HOSTNAME/$PROJECT_ID/$_UI_SERVICE_NAME:$COMMIT_SHA -f Dockerfile.ui .
     id: Build-UI
     waitFor:
       - SetupEnv-UI
@@ -133,17 +120,17 @@ images:
 options:
   substitutionOption: ALLOW_LOOSE
 substitutions:
-  _API_GLOBAL_SECRET: prod-global-nest-env
-  _API_ENV_SECRET: mpao-prod-petty-cash-api-secret-global
-  _SERVICE_ACCOUNT: prod-cloudrun@production-147011.iam.gserviceaccount.com
-  _VPC_CONNECTOR: red-connector
-  _CLOUD_SQL: production-147011:asia-east1:prod-mssql-db
-  _UI_SERVICE_NAME: mpao-prod-petty-cash-run-asia-east-1
-  _PLATFORM: managed
   _UI_ENV_SECRET: mpao-prod-petty-cash-secret-global
   _DEPLOY_REGION: asia-east1
+  _VPC_CONNECTOR: red-connector
+  _PLATFORM: managed
+  _CLOUD_SQL: production-147011:asia-east1:prod-mssql-db
+  _API_GLOBAL_SECRET: prod-global-nest-env
+  _SERVICE_ACCOUNT: prod-cloudrun@production-147011.iam.gserviceaccount.com
+  _UI_SERVICE_NAME: mpao-prod-petty-cash-run-asia-east-1
   _GCR_HOSTNAME: asia.gcr.io
   _API_SERVICE_NAME: mpao-prod-petty-cash-api-run-asia-east-1
+  _API_ENV_SECRET: mpao-prod-petty-cash-api-secret-global
 tags:
   - gcp-cloud-build-deploy-cloud-run
   - gcp-cloud-build-deploy-cloud-run-managed
