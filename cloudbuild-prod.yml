@@ -48,9 +48,6 @@ steps:
         set -euo pipefail
 
         gcloud secrets versions access latest --secret=$_UI_ENV_SECRET >
-        apps/petty-cash-ui/.env &&
-
-        gcloud secrets versions access latest --secret=$_API_GLOBAL_SECRET >
         apps/petty-cash-ui/.env
     id: SetupEnv-UI
     waitFor:
