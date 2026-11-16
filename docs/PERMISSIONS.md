@@ -10,18 +10,19 @@ The API uses Midgard IdentityGuard + PermissionGuard, with EntityGuard restricti
 
 Run [petty-cash-permissions.sql](sql/petty-cash-permissions.sql) against **Bifrost MySQL**, not the Petty Cash database. Verify `@mpao_organisation_id` first; `1` is the local MPAO entity, not a portable production default. Use a client that stops on errors, without `--force`.
 
-The script upserts all 39 permission definitions and two roles:
+The script upserts all 39 permission definitions and three roles:
 
 | Role | Pages | Workflow actions |
 | --- | --- | --- |
 | Petty Cash Request Role | Requests, GS Approvals, History | Create/edit own requests, confirm collection of disbursed cash (any active requester, not just the creator), offer/accept/decline/withdraw a cash custody hand-over to another active requester, add/remove receipts (including bulk and optional AI), settle, authorize/reject requests, view history and request details |
-| Petty Cash Finance Role | Finance Desk, History, Reconciliation, Ledger, Settings | Manage requester/approver staff, prepare/notify collection, send reminders, return settlement for correction, finalize/close, record vault counts, resolve discrepancies with or without adjustment, top-ups, ledger and reconciliation reports |
+| Petty Cash Finance Staff | Finance Desk, History, Reconciliation, Ledger | Prepare/notify collection, send reminders, return settlement for correction, finalize/close, record vault counts, resolve discrepancies with or without adjustment, top-ups, ledger and reconciliation reports |
+| Petty Cash Finance Admin | Finance Desk, History, Reconciliation, Ledger, Settings | Everything Finance Staff has, plus manage requester/approver staff in Settings |
 
-Both include `requests.get`, `files.download`, `notifications.list`, `notifications.markread` and `statistics.get`. These support details, attachments, notifications and dashboard statistics. The Request role has 23 permissions; Finance has 22. A user assigned both receives the union.
+All three include `requests.get`, `files.download`, `notifications.list`, `notifications.markread` and `statistics.get`. These support details, attachments, notifications and dashboard statistics. The Request role has 23 permissions; Finance Staff has 18; Finance Admin has 22. A user assigned more than one role receives the union.
 
 The source templates are `ROLE_PERMISSION_GROUPS` in `apps/petty-cash-api/src/auth/permissions.ts`; tests compare them with SQL memberships. `permissions.json` remains the Bifrost permission-import manifest.
 
-The script reuses each role by organisation and key (`petty-cash.request` / `petty-cash.finance`), generates a UUID in MySQL when missing, reactivates deleted definitions/links and reconciles catalog permissions on those two roles. Sequential reruns do not duplicate roles or links. The script also soft-deletes the obsolete `petty-cash.access.get` and `petty-cash.idempotency.create` definitions and their role links. Other permissions on unrelated roles and user assignments remain untouched. In particular, **the old all-permissions role remains broad**: replace its user assignments with these new roles through Bifrost to enforce the split. Refresh the affected Bifrost sessions/cache afterward. The script itself does not assign users.
+The script reuses each role by organisation and key (`petty-cash.request` / `petty-cash.finance` / `petty-cash.finance-admin`), generates a UUID in MySQL when missing, reactivates deleted definitions/links and reconciles catalog permissions on those three roles. Sequential reruns do not duplicate roles or links. The script also soft-deletes the obsolete `petty-cash.access.get` and `petty-cash.idempotency.create` definitions and their role links. Other permissions on unrelated roles and user assignments remain untouched. In particular, **the old all-permissions role remains broad**: replace its user assignments with these new roles through Bifrost to enforce the split. Refresh the affected Bifrost sessions/cache afterward. The script itself does not assign users.
 
 Alternatively sync definitions through `/midgard/permissions/sync` or the library alias `/api/v1/midgard/permissions/sync`, then create/assign the roles using the templates. Syncing definitions does not assign permissions to roles or users.
 
@@ -50,6 +51,6 @@ Ownership rules differ by stage (see `allowedActions` in `common/request-policy.
 
 ## Settings staff lists
 
-`staffassignments.list` controls the Settings sidebar and direct route. `staffassignments.lookup`, `staffassignments.add` and `staffassignments.remove` control the corresponding operations. All four use the `petty-cash.` prefix and standard identity/entity/permission guards. The provisioning SQL grants all four to the Finance role; the Request role receives none. The role counts are 18 for Request and 22 for Finance.
+`staffassignments.list` controls the Settings sidebar and direct route. `staffassignments.lookup`, `staffassignments.add` and `staffassignments.remove` control the corresponding operations. All four use the `petty-cash.` prefix and standard identity/entity/permission guards. The provisioning SQL grants all four to the Finance Admin role only; the Finance Staff and Request roles receive none. The role counts are 23 for Request, 18 for Finance Staff and 22 for Finance Admin.
 
 `GET /access` reports only the caller’s active requester/approver eligibility alongside roles and capabilities. The frontend intersects this with permission/state/ownership-based allowed actions. Removing an assignment removes frontend action eligibility; it does not change Bifrost permissions or backend business authorization. See [staff settings](STAFF_SETTINGS.md) for rollout and setup.

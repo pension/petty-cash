@@ -187,6 +187,9 @@ test('request and finance role templates have separate pages and actions', async
   const finance = await pipe.transform(
     user(ROLE_PERMISSION_GROUPS.finance.map((p) => `petty-cash.${p}`)),
   );
+  const financeAdmin = await pipe.transform(
+    user(ROLE_PERMISSION_GROUPS.financeAdmin.map((p) => `petty-cash.${p}`)),
+  );
   expect(capabilities(request)).toMatchObject({
     viewRequests: true,
     viewApprovals: true,
@@ -201,6 +204,22 @@ test('request and finance role templates have separate pages and actions', async
     createRequest: true,
   });
   expect(capabilities(finance)).toMatchObject({
+    viewRequests: false,
+    viewApprovals: false,
+    viewHistory: true,
+    viewFinance: true,
+    viewReconciliation: true,
+    viewLedger: true,
+    viewSettings: false,
+    lookupStaff: false,
+    addStaff: false,
+    removeStaff: false,
+    createRequest: false,
+    topUp: true,
+    recordCount: true,
+    resolveCount: true,
+  });
+  expect(capabilities(financeAdmin)).toMatchObject({
     viewRequests: false,
     viewApprovals: false,
     viewHistory: true,
