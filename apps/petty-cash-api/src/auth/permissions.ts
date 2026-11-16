@@ -50,7 +50,23 @@ const shared: Permission[] = [
   'notifications.markread',
   'statistics.get',
 ];
-export const ROLE_PERMISSION_GROUPS: Record<'request' | 'finance', Permission[]> = {
+const finance: Permission[] = [
+  ...shared,
+  'requests.history',
+  'disbursements.list',
+  'disbursements.notifycollection',
+  'settlements.returnforcorrection',
+  'settlements.finalize',
+  'fund.get',
+  'fund.transactions',
+  'fund.topup',
+  'vaultcounts.list',
+  'vaultcounts.recordcount',
+  'vaultcounts.resolve',
+  'notifications.sendreminder',
+  'reports.reconciliation',
+];
+export const ROLE_PERMISSION_GROUPS: Record<'request' | 'finance' | 'financeAdmin', Permission[]> = {
   request: [
     ...shared,
     'requests.list',
@@ -72,24 +88,12 @@ export const ROLE_PERMISSION_GROUPS: Record<'request' | 'finance', Permission[]>
     'files.upload',
     'ocr.receipt',
   ],
-  finance: [
-    ...shared,
+  finance,
+  financeAdmin: [
+    ...finance,
     'staffassignments.list',
     'staffassignments.lookup',
     'staffassignments.add',
     'staffassignments.remove',
-    'requests.history',
-    'disbursements.list',
-    'disbursements.notifycollection',
-    'settlements.returnforcorrection',
-    'settlements.finalize',
-    'fund.get',
-    'fund.transactions',
-    'fund.topup',
-    'vaultcounts.list',
-    'vaultcounts.recordcount',
-    'vaultcounts.resolve',
-    'notifications.sendreminder',
-    'reports.reconciliation',
   ],
 };

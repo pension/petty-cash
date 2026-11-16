@@ -365,12 +365,18 @@ describe('MPAO boundary on all HTTP routes', () => {
     ['request', '/finance', 403],
     ['request', '/fund/transactions', 403],
     ['request', '/vault-counts', 403],
+    ['request', '/staff-assignments', 403],
     ['finance', '/finance', 200],
     ['finance', '/fund/transactions', 200],
     ['finance', '/vault-counts', 200],
     ['finance', '/approvals', 403],
     ['finance', '/requests/history', 200],
     ['finance', '/requests', 403],
+    ['finance', '/staff-assignments', 403],
+    ['financeAdmin', '/finance', 200],
+    ['financeAdmin', '/fund/transactions', 200],
+    ['financeAdmin', '/vault-counts', 200],
+    ['financeAdmin', '/staff-assignments', 200],
   ] as const)('%s role: %s returns %s', async (role, path, status) => {
     await request(app.getHttpServer() as Server)
       .get(path)
@@ -387,7 +393,7 @@ describe('MPAO boundary on all HTTP routes', () => {
       join(__dirname, '../../../../docs/sql/petty-cash-permissions.sql'),
       'utf8',
     );
-    const rows = [...sql.matchAll(/'([a-z]+\.[a-z]+)', ([01]), ([01])\)/g)];
+    const rows = [...sql.matchAll(/'([a-z]+\.[a-z]+)', ([01]), ([01]), ([01])\)/g)];
     expect(rows.length).toBe(PERMISSIONS.length);
     expect(
       rows
@@ -401,6 +407,12 @@ describe('MPAO boundary on all HTTP routes', () => {
         .map((r) => r[1])
         .sort(),
     ).toEqual([...ROLE_PERMISSION_GROUPS.finance].sort());
+    expect(
+      rows
+        .filter((r) => r[4] === '1')
+        .map((r) => r[1])
+        .sort(),
+    ).toEqual([...ROLE_PERMISSION_GROUPS.financeAdmin].sort());
   });
   test('production permission for create does not authorize edit', async () => {
     await request(app.getHttpServer() as Server)
