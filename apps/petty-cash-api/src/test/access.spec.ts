@@ -8,7 +8,12 @@ import { IdentityController } from '@pension/midgard/dist/nest-client/identity.c
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { IdentityTestModule } from './identity-test.module';
-import { ExecutionContext, INestApplication, UnauthorizedException } from '@nestjs/common';
+import {
+  ExecutionContext,
+  INestApplication,
+  RequestMethod,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { Server } from 'node:http';
 import request from 'supertest';
@@ -238,16 +243,23 @@ describe('MPAO boundary on all HTTP routes', () => {
       })
       .compile();
     app = module.createNestApplication();
+    // Mirrors main.ts's production prefix so this suite exercises real IAP-facing routing.
+    app.setGlobalPrefix('api', {
+      exclude: [
+        { path: 'midgard/permissions/sync', method: RequestMethod.GET },
+        { path: 'api/v1/midgard/permissions/sync', method: RequestMethod.GET },
+      ],
+    });
     await app.init();
   });
   afterAll(() => app.close());
   test('issues distinct server UUIDs for an MPAO identity without action permissions', async () => {
     await request(app.getHttpServer() as Server)
-      .post('/idempotency-keys')
+      .post('/api/idempotency-keys')
       .expect(401);
     const issue = () =>
       request(app.getHttpServer() as Server)
-        .post('/idempotency-keys')
+        .post('/api/idempotency-keys')
         .set('Authorization', 'Bearer test')
         .set('x-test-org', '1')
         .set('x-test-role', 'none')
@@ -265,7 +277,7 @@ describe('MPAO boundary on all HTTP routes', () => {
     async (method, path) => {
       touched.mockClear();
       await request(app.getHttpServer() as Server)
-        [method.toLowerCase() as 'get' | 'post' | 'patch' | 'delete'](`/${path}`)
+        [method.toLowerCase() as 'get' | 'post' | 'patch' | 'delete'](`/api/${path}`)
         .set('Authorization', 'Bearer test')
         .set('x-test-org', '2')
         .expect(403);
@@ -275,7 +287,7 @@ describe('MPAO boundary on all HTTP routes', () => {
   test.each(routes)('%s /%s rejects missing application permission', async (method, path) => {
     touched.mockClear();
     await request(app.getHttpServer() as Server)
-      [method.toLowerCase() as 'get' | 'post' | 'patch' | 'delete'](`/${path}`)
+      [method.toLowerCase() as 'get' | 'post' | 'patch' | 'delete'](`/api/${path}`)
       .set('Authorization', 'Bearer test')
       .set('x-test-org', '1')
       .set('x-test-role', 'none')
@@ -284,10 +296,10 @@ describe('MPAO boundary on all HTTP routes', () => {
   });
   test('returns no capabilities for an MPAO identity without action permissions', async () => {
     await request(app.getHttpServer() as Server)
-      .get('/access')
+      .get('/api/access')
       .expect(401);
     const response = await request(app.getHttpServer() as Server)
-      .get('/access')
+      .get('/api/access')
       .set('Authorization', 'Bearer test')
       .set('x-test-org', '1')
       .set('x-test-role', 'none')
@@ -296,21 +308,21 @@ describe('MPAO boundary on all HTTP routes', () => {
     expect(body.roles).toEqual([]);
     expect(Object.values(body.capabilities).every((value) => value === false)).toBe(true);
     await request(app.getHttpServer() as Server)
-      .get('/access')
+      .get('/api/access')
       .set('Authorization', 'Bearer test')
       .set('x-test-org', '1')
       .expect(200);
   });
   test('add receipt permission includes removal but removal alone does not grant adding', async () => {
     await request(app.getHttpServer() as Server)
-      .delete('/requests/PC-test/expenses/test')
+      .delete('/api/requests/PC-test/expenses/test')
       .set('Authorization', 'Bearer test')
       .set('x-test-org', '1')
       .set('x-test-permissions', 'petty-cash.expenses.addexpense')
       .expect(200);
     touched.mockClear();
     await request(app.getHttpServer() as Server)
-      .post('/requests/PC-test/expenses')
+      .post('/api/requests/PC-test/expenses')
       .set('Authorization', 'Bearer test')
       .set('x-test-org', '1')
       .set('x-test-permissions', 'petty-cash.expenses.removeexpense')
@@ -379,7 +391,7 @@ describe('MPAO boundary on all HTTP routes', () => {
     ['financeAdmin', '/staff-assignments', 200],
   ] as const)('%s role: %s returns %s', async (role, path, status) => {
     await request(app.getHttpServer() as Server)
-      .get(path)
+      .get(`/api${path}`)
       .set('Authorization', 'Bearer test')
       .set('x-test-org', '1')
       .set(
@@ -416,14 +428,14 @@ describe('MPAO boundary on all HTTP routes', () => {
   });
   test('production permission for create does not authorize edit', async () => {
     await request(app.getHttpServer() as Server)
-      .post('/requests')
+      .post('/api/requests')
       .set('Authorization', 'Bearer test')
       .set('x-test-org', '1')
       .set('x-test-permissions', 'petty-cash.requests.create')
       .expect(201);
     touched.mockClear();
     await request(app.getHttpServer() as Server)
-      .patch('/requests/PC-test')
+      .patch('/api/requests/PC-test')
       .set('Authorization', 'Bearer test')
       .set('x-test-org', '1')
       .set('x-test-permissions', 'petty-cash.requests.create')
@@ -432,14 +444,14 @@ describe('MPAO boundary on all HTTP routes', () => {
   });
   test('production accepts fully lowercase permissions for camelCase handlers', async () => {
     await request(app.getHttpServer() as Server)
-      .post('/requests/PC-test/notify-collection')
+      .post('/api/requests/PC-test/notify-collection')
       .set('Authorization', 'Bearer test')
       .set('x-test-org', '1')
       .set('x-test-permissions', 'petty-cash.disbursements.notifycollection')
       .expect(201);
     touched.mockClear();
     await request(app.getHttpServer() as Server)
-      .post('/requests/PC-test/confirm-receipt')
+      .post('/api/requests/PC-test/confirm-receipt')
       .set('Authorization', 'Bearer test')
       .set('x-test-org', '1')
       .set('x-test-permissions', 'petty-cash.disbursements.notifycollection')
@@ -451,25 +463,25 @@ describe('MPAO boundary on all HTTP routes', () => {
     env.APP_ENV = 'development';
     try {
       await request(app.getHttpServer() as Server)
-        .get('/access')
+        .get('/api/access')
         .set('Authorization', 'Bearer test')
         .set('x-test-org', '1')
         .set('x-test-role', 'none')
         .expect(200);
       await request(app.getHttpServer() as Server)
-        .post('/requests')
+        .post('/api/requests')
         .set('Authorization', 'Bearer test')
         .set('x-test-org', '1')
         .set('x-test-role', 'none')
         .expect(201);
       await request(app.getHttpServer() as Server)
-        .get('/access')
+        .get('/api/access')
         .set('Authorization', 'Bearer test')
         .set('x-test-org', '2')
         .set('x-test-role', 'none')
         .expect(403);
       await request(app.getHttpServer() as Server)
-        .get('/access')
+        .get('/api/access')
         .expect(401);
     } finally {
       env.APP_ENV = 'production';

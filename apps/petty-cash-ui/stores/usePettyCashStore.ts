@@ -180,7 +180,9 @@ export const usePettyCashStore = defineStore('pettyCash', () => {
   }
   const keys = new Map<string, string>();
   const blobs = new Map<string, string>();
-  const base = () => String(useRuntimeConfig().public.apiBase).replace(/\/$/, '');
+  // IAP in front of the API origin only bypasses its auth challenge for /api/*, so every
+  // request is routed under /api here rather than via the apiBase env var itself.
+  const base = () => `${String(useRuntimeConfig().public.apiBase).replace(/\/$/, '')}/api`;
   async function api<T = unknown>(
     path: string,
     method = 'GET',

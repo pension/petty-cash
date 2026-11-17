@@ -70,6 +70,8 @@ Each feature has its own Nest module, controller, service and input DTOs; see [A
 
 For existing configuration, replace `MPAO_ORGANISATION_UUID` with the verified numeric `MPAO_ENTITY_ID`, and set `PETTY_CASH_API_URL` to the API origin (for example `http://localhost:4000`) without `/api/float`. No database migration is required for this structural refactor. The old prefixed routes and local `/me` endpoint are intentionally unavailable.
 
+All business routes are now served under a global `/api` prefix (for example `/api/requests`), since Google IAP in front of the API origin only bypasses its auth challenge for `/api/*`. This is unrelated to the removed `/api/float` scheme above — `PETTY_CASH_API_URL` stays the bare origin, and `/api` is appended in code (the API's global prefix, the UI's request-base helper), not the env var. Bifrost's Midgard permission-sync scrape keeps its existing path and is excluded from this prefix.
+
 Permission setup and bulk SQL: [PERMISSIONS.md](docs/PERMISSIONS.md). Use `APP_NAME=petty-cash`; development skips permissions through Midgard while retaining authentication, MPAO and workflow checks.
 
 ## Staff Settings

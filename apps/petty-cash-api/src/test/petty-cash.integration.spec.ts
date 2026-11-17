@@ -2,6 +2,7 @@ import { StorageService } from '../storage/storage.service';
 jest.mock('@pension/midgard/dist/env', () => ({ APP_ENV: 'production', APP_NAME: 'petty-cash' }));
 import { IdentityTestModule } from './identity-test.module';
 import type { ExecutionContext, INestApplication } from '@nestjs/common';
+import { RequestMethod } from '@nestjs/common';
 import type { Server } from 'node:http';
 import request from 'supertest';
 import { IdentityGuard } from '@pension/midgard';
@@ -185,6 +186,13 @@ integration('Petty Cash MySQL financial workflow', () => {
       })
       .compile();
     app = module.createNestApplication();
+    // Mirrors main.ts's production prefix so this suite exercises real IAP-facing routing.
+    app.setGlobalPrefix('api', {
+      exclude: [
+        { path: 'midgard/permissions/sync', method: RequestMethod.GET },
+        { path: 'api/v1/midgard/permissions/sync', method: RequestMethod.GET },
+      ],
+    });
     await app.init();
     requests = module.get(RequestsService);
     approvals = module.get(ApprovalsService);
@@ -281,12 +289,12 @@ integration('Petty Cash MySQL financial workflow', () => {
       },
       gs,
     );
-  test('HTTP feature routes complete collection, upload, correction and finalization without a prefix', async () => {
+  test('HTTP feature routes complete collection, upload, correction and finalization under the /api prefix', async () => {
     const server = app.getHttpServer() as Server;
     const auth = (actor: Actor) => `Bearer ${actor.id}`;
     const before = (await fund.fund()).currentExpectedBalance;
     const accessResponse = await request(server)
-      .get('/access')
+      .get('/api/access')
       .set('Authorization', auth(gs))
       .expect(200);
     expect(accessResponse.body).toEqual(await access.get(gs));
@@ -295,7 +303,7 @@ integration('Petty Cash MySQL financial workflow', () => {
     await request(server).get('/api/float/requests').set('Authorization', auth(gs)).expect(404);
     let row = (
       await request(server)
-        .post('/requests')
+        .post('/api/requests')
         .set('Authorization', auth(gs))
         .send({ purpose: 'HTTP module workflow', requestedAmount: 100, neededBy: today() })
         .expect(201)
@@ -309,7 +317,7 @@ integration('Petty Cash MySQL financial workflow', () => {
     };
     const post = async (action: string, actor: Actor, body: object = {}) => {
       const response = await request(server)
-        .post(`/requests/${row.id}/${action}`)
+        .post(`/api/requests/${row.id}/${action}`)
         .set('Authorization', auth(actor))
         .set('Idempotency-Key', randomUUID())
         .send({ expectedVersion: row.version, ...body })
@@ -317,7 +325,7 @@ integration('Petty Cash MySQL financial workflow', () => {
       row = response.body as typeof row;
     };
     await request(server)
-      .post(`/requests/${row.id}/unknown-action`)
+      .post(`/api/requests/${row.id}/unknown-action`)
       .set('Authorization', auth(gs))
       .expect(404);
     await post('authorize', manager);
@@ -329,11 +337,12 @@ integration('Petty Cash MySQL financial workflow', () => {
       Buffer.alloc(100),
     ]);
     const uploaded = await request(server)
-      .post('/files')
+      .post('/api/files')
       .set('Authorization', auth(gs))
       .attach('file', receipt, { filename: 'receipt.png', contentType: 'image/png' })
       .expect(201);
     const file = uploaded.body as { fileId: string; url: string };
+    // The service returns a bare relative path; consumers (the UI, this test) prepend /api themselves.
     expect(file.url).toBe(`/files/${file.fileId}`);
     await post('expenses', gs, {
       supplierName: 'HTTP Vendor',
@@ -343,12 +352,12 @@ integration('Petty Cash MySQL financial workflow', () => {
       fileId: file.fileId,
     });
     const loaded = await request(server)
-      .get(`/requests/${row.id}`)
+      .get(`/api/requests/${row.id}`)
       .set('Authorization', auth(gs))
       .expect(200);
     expect((loaded.body as typeof row).expenses[0].receiptUrl).toBe(file.url);
     const download = await request(server)
-      .get(file.url)
+      .get(`/api${file.url}`)
       .set('Authorization', auth(finance))
       .expect(200);
     expect(download.body).toEqual(receipt);
@@ -361,10 +370,10 @@ integration('Petty Cash MySQL financial workflow', () => {
     expect(row.expenseTotal).toBe(60.25);
     expect((await fund.fund()).currentExpectedBalance).toBeCloseTo(before - 60.25, 2);
     await request(server)
-      .get('/reports/reconciliation')
+      .get('/api/reports/reconciliation')
       .set('Authorization', auth(finance))
       .expect(200);
-    await request(server).post('/ocr/receipts').set('Authorization', auth(gs)).expect(400);
+    await request(server).post('/api/ocr/receipts').set('Authorization', auth(gs)).expect(400);
   });
   test('bulk receipts commit once, roll back together, and lock after settlement', async () => {
     const row = await issue(100);
