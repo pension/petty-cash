@@ -1,23 +1,25 @@
 # Petty Cash API feature structure
 
-The API follows the original project's Nest feature-folder pattern. Each folder owns its controller, service, module and input DTOs. Controllers use explicit methods; business logic lives in services. There is no shared application URL prefix or API version.
+The API follows the original project's Nest feature-folder pattern. Each folder owns its controller, service, module and input DTOs. Controllers use explicit methods; business logic lives in services. There is no API version, but every business route is served under a single global `/api` prefix (`main.ts`'s `app.setGlobalPrefix('api', ...)`), so that Google IAP — configured to only bypass its auth challenge for `/api/*` — lets authenticated Bifrost-token calls through. `PETTY_CASH_API_URL` still names the bare API origin; `/api` is appended in code, not the env var. This is unrelated to the old, already-removed `/api/float` versioning prefix below, which still correctly 404s.
 
 | Feature | Routes | Responsibility |
 | --- | --- | --- |
-| idempotency | `POST /idempotency-keys` | Server-generated UUID retry keys; no cash movement |
-| access | `GET /access` | Application roles and capabilities only |
-| requests | `GET/POST /requests`, `GET /requests/history`, `GET/PATCH /requests/:id` | Requests and details |
-| approvals | `GET /approvals`, `POST /requests/:id/authorize`, `/reject` | GS Manager decisions |
-| disbursements | `GET /finance`, `POST /requests/:id/notify-collection`, `/confirm-receipt` | Preparation and acknowledged collection |
-| expenses | `POST /requests/:id/expenses`, `DELETE /requests/:id/expenses/:expenseId` | Expense evidence |
-| settlements | `POST /requests/:id/settle`, `/return-for-correction`, `/finalize` | Settlement and atomic closure |
-| fund | `GET /fund`, `GET /fund/transactions`, `POST /fund/top-ups` | Vault fund and ledger queries |
-| vault-counts | `GET/POST /vault-counts`, `POST /vault-counts/:id/resolve` | Physical counts and discrepancy resolution |
-| files | `POST /files`, `GET /files/:id` | Streaming receipt storage/retrieval |
-| notifications | `GET /notifications`, `POST /notifications/:id/read`, `POST /requests/:id/reminders` | Inbox and reminders |
-| statistics | `GET /stats` | Authoritative dashboard statistics |
-| reports | `GET /reports/reconciliation` | Complete report data |
-| ocr | `POST /ocr/receipts` | Optional Google AI suggestions from a saved fileId; 501 if unconfigured, 503 on provider failure |
+| idempotency | `POST /api/idempotency-keys` | Server-generated UUID retry keys; no cash movement |
+| access | `GET /api/access` | Application roles and capabilities only |
+| requests | `GET/POST /api/requests`, `GET /api/requests/history`, `GET/PATCH /api/requests/:id` | Requests and details |
+| approvals | `GET /api/approvals`, `POST /api/requests/:id/authorize`, `/reject` | GS Manager decisions |
+| disbursements | `GET /api/finance`, `POST /api/requests/:id/notify-collection`, `/confirm-receipt` | Preparation and acknowledged collection |
+| expenses | `POST /api/requests/:id/expenses`, `DELETE /api/requests/:id/expenses/:expenseId` | Expense evidence |
+| settlements | `POST /api/requests/:id/settle`, `/return-for-correction`, `/finalize` | Settlement and atomic closure |
+| fund | `GET /api/fund`, `GET /api/fund/transactions`, `POST /api/fund/top-ups` | Vault fund and ledger queries |
+| vault-counts | `GET/POST /api/vault-counts`, `POST /api/vault-counts/:id/resolve` | Physical counts and discrepancy resolution |
+| files | `POST /api/files`, `GET /api/files/:id` | Streaming receipt storage/retrieval |
+| notifications | `GET /api/notifications`, `POST /api/notifications/:id/read`, `POST /api/requests/:id/reminders` | Inbox and reminders |
+| statistics | `GET /api/stats` | Authoritative dashboard statistics |
+| reports | `GET /api/reports/reconciliation` | Complete report data |
+| ocr | `POST /api/ocr/receipts` | Optional Google AI suggestions from a saved fileId; 501 if unconfigured, 503 on provider failure |
+
+Bifrost's Midgard permission-sync scrape (`GET /midgard/permissions/sync`, aliased by the `@pension/midgard` library at `GET /api/v1/midgard/permissions/sync`) is explicitly excluded from the `/api` prefix, since the alias already satisfies the IAP bypass rule and doubling it would break Bifrost's existing scrape configuration.
 
 ## Identity and authorization
 
@@ -43,6 +45,7 @@ Zod input schemas and inferred DTOs are stored in each feature's `dto/` folder. 
 - Set `PETTY_CASH_API_URL` to the API origin without `/api/float`.
 - Update scheduler commands to `node dist/src/cli.js maintenance`.
 - No database migration is required. Old prefixed routes and a local `/me` return 404.
+- Routes now live under `/api` (e.g. `/api/requests`) so Google IAP's `/api/*` bypass rule covers them — unrelated to the removed `/api/float` scheme above. `PETTY_CASH_API_URL` is unchanged; the API and UI append `/api` in code.
 
 ### Bulk receipt confirmation
 

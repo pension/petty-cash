@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { RequestMethod } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { PORT } from 'env';
 import { AppModule } from './app.module';
@@ -6,6 +7,16 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.enableCors();
+  // IAP in front of this origin only bypasses its auth challenge for /api/*, so every
+  // business route must live under /api. The Midgard IdentityController already serves
+  // Bifrost's permission-sync scrape at /api/v1/midgard/permissions/sync (and the plain
+  // /midgard/permissions/sync alias) — excluded here so it isn't double-prefixed.
+  app.setGlobalPrefix('api', {
+    exclude: [
+      { path: 'midgard/permissions/sync', method: RequestMethod.GET },
+      { path: 'api/v1/midgard/permissions/sync', method: RequestMethod.GET },
+    ],
+  });
   app
     .getHttpAdapter()
     .getInstance()
