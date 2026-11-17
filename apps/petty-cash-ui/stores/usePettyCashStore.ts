@@ -181,8 +181,13 @@ export const usePettyCashStore = defineStore('pettyCash', () => {
   const keys = new Map<string, string>();
   const blobs = new Map<string, string>();
   // IAP in front of the API origin only bypasses its auth challenge for /api/*, so every
-  // request is routed under /api here rather than via the apiBase env var itself.
-  const base = () => `${String(useRuntimeConfig().public.apiBase).replace(/\/$/, '')}/api`;
+  // request is routed under /api here rather than via the apiBase env var itself. Some
+  // deployments already route apiBase through a shared domain's /api path (e.g. IAP/load
+  // balancer config), so this only appends /api when it isn't already the base's suffix.
+  const base = () => {
+    const origin = String(useRuntimeConfig().public.apiBase).replace(/\/$/, '');
+    return origin.endsWith('/api') ? origin : `${origin}/api`;
+  };
   async function api<T = unknown>(
     path: string,
     method = 'GET',
